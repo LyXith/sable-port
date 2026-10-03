@@ -30,7 +30,7 @@ Sable 是一个为方块世界加入**可交互的物理化移动结构**的模�
 
 - Fabric Loader `>= 0.19.5`
 - Fabric API `0.161.0+26.3`
-- [sable-companion](https://github.com/ryanhcode/sable-companion) `1.6.0`（数学 / 物理伴随库）
+- [sable-companion](https://github.com/ryanhcode/sable-companion) `1.6.0`（仅编译）
 
 **可选 / 兼容**
 
@@ -54,7 +54,7 @@ gradle build
 产物：
 
 ```
-build/libs/sable-fabric-26.3-3.0.0.jar        # 发布用（remap 后）
+build/libs/sable-fabric-26.3-3.0.0.jar        # 发布用
 build/libs/sable-fabric-26.3-3.0.0-sources.jar
 ```
 
