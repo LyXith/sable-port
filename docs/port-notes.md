@@ -72,7 +72,7 @@
 
 - 修复 `RandomPosMixin` 导致的线上崩溃。
 - `IntegratedServerMixin` 把 Toast 操作包进 `minecraft.execute`，修复跨线程崩溃。
-- 删除 `/sable test` 命令；删除依赖 Create 方块的 schematic（`vostone_2.nbt`、`vinalilime.nbt`）。
+- 删除依赖 Create 方块的 schematic（`vostone_2.nbt`、`vinalilime.nbt`）。
 
 ## 5. 已知限制
 

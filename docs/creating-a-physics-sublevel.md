@@ -3,8 +3,6 @@
 本文说明如何用 Sable 的 API 在服务端创建一个“物理化”的子关卡（sub-level）——即一组会随刚体模拟移动的方块。
 
 > 只能在**服务端**创建；客户端会自动同步并渲染。
-> 上游的 `/sable test` 示例命令在本移植中已删除；可参考游戏内 `/sable spawn block <方块>`（`SableSpawnCommands`）或本文示例。
-
 ## 最简示例
 
 ```java
