@@ -1,0 +1,153 @@
+Skip to content
+ryanhcode
+sable
+Repository navigation
+Code
+Issues
+986
+ (986)
+Pull requests
+41
+ (41)
+Agents
+Actions
+Projects
+Wiki
+Security and quality
+Insights
+AbstractMethodError when starting Sable 2.0.5 on Fabric 1.21.1
+ #1568
+Open
+Open
+AbstractMethodError when starting Sable 2.0.5 on Fabric 1.21.1
+#1568
+Description
+@yThezIsma
+yThezIsma
+opened 2w ago
+Context
+Description
+I'm trying to use Sable 2.0.5 in a Fabric 1.21.1 development environment.
+
+The game starts normally and Sable loads successfully, but the integrated server crashes when Sable tries to create the Rapier physics pipeline.
+
+Environment
+Minecraft: 1.21.1
+Sable: 2.0.5
+Fabric Loader: 0.18.2
+Fabric API: 0.116.8+1.21.1
+Fabric Loom: 1.16.3
+Java: 21.0.11
+OS: Windows 11
+Dependencies loaded
+sable 2.0.5
+sable_rapier 2.0.5
+sablecompanion 1.6.0
+veil 4.3.2
+forgeconfigapiport 21.1.3
+Gradle dependency
+modApi("dev.ryanhcode.sable:sable-fabric-${project.minecraft_version}:${project.sable_version}")
+Crash
+Sable loads successfully:
+
+[Sable] Sable loaded!
+But when the integrated server starts:
+
+[Sable] Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+the server crashes with:
+
+java.lang.AbstractMethodError:
+Receiver class dev.ryanhcode.sable.physics.impl.rapier.RapierPhysicsPipelineProvider
+does not define or inherit an implementation of the resolved method
+'abstract dev.ryanhcode.sable.api.physics.PhysicsPipeline createPipeline(net.minecraft.server.world.ServerWorld)'
+of interface dev.ryanhcode.sable.api.physics.PhysicsPipelineProvider.
+The crash occurs here:
+
+at dev.ryanhcode.sable.sublevel.system.SubLevelPhysicsSystem.<init>(SubLevelPhysicsSystem.java:128)
+at dev.ryanhcode.sable.Sable.defaultSubLevelContainerInitializer(Sable.java:66)
+I also tried using the Fabric Loader/Fabric API versions specified by the Sable project, but the same AbstractMethodError still occurs.
+
+Could this be an incompatibility between sable-fabric and sable_rapier, or is there a specific dependency/version combination required for Sable 2.0.5 on Fabric 1.21.1?
+
+I can provide the full crash report and Gradle files if needed.
+
+Crash Report
+https://api.mclo.gs/1/raw/D96MpIZ
+
+Activity
+
+yThezIsma
+added
+type: crash
+Something crashes my game
+ 2w ago
+
+yThezIsma
+changed the title [-]bstractMethodError when starting Sable 2.0.5 on Fabric 1.21.1[/-] [+]AbstractMethodError when starting Sable 2.0.5 on Fabric 1.21.1[/+] 2w ago
+yThezIsma commented 2 weeks ago
+@yThezIsma
+yThezIsma
+2w ago
+Author
+I can confirm this same crash — happens identically on both 2.0.4 and 2.0.5 for Fabric, so it's not isolated to 2.0.5.
+
+I dug through the changelog and found a likely root cause: this started with the 2.0.0 release, which included:
+
+Separate sable_rapier into its own module
+
+That's almost certainly when the PhysicsPipelineProvider interface (in sable-fabric core) and RapierPhysicsPipelineProvider (now in the separated sable_rapier module) fell out of sync at build time. Any version before 2.0.0 works fine for me — the crash only appears from 2.0.0 onward.
+
+Also worth noting: sable-companion is pulled in via an open-ended version range ([version,)) in its own build config, which could easily cause a build-time mismatch between the core and rapier module if a newer companion/rapier build gets resolved than what the core was actually compiled against.
+
+For anyone hitting this in the meantime: pinning sable_version to the last pre-2.0.0 release avoids the crash entirely.
+
+
+yThezIsma
+closed this as completed2w ago
+
+yThezIsma
+reopened this 2w ago
+
+Modog500000
+self-assigned this
+1w ago
+Add a comment
+new Comment
+Markdown input: edit mode selected.
+Write
+Preview
+Use Markdown to format your comment
+
+Please follow this repository's contributing guidelines.
+Metadata
+Assignees
+Labels
+type: crash
+Something crashes my game
+Projects
+No projects
+Milestone
+No milestone
+Relationships
+None yet
+Development
+No branches or pull requests
+NotificationsCustomize
+You're not receiving notifications from this thread.
+
+Participants
+@Modog500000
+@yThezIsma
+Issue actions
+Footer
+© 2026 GitHub, Inc.
+Footer navigation
+Terms
+Privacy
+Security
+Status
+Community
+Docs
+Contact
+Manage cookies
+Do not share my personal information
