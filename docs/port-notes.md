@@ -9,7 +9,6 @@
 - **必须使用 JDK 25**（Minecraft 26.3 / Fabric 26.3 的 class file version 为 69）。
 - 项目通过 `gradle/gradle-daemon-jvm.properties` 的 `toolchainVersion=25` 自动定位工具链，**不要硬编码 `JAVA_HOME`**。
 - 构建：`gradle build`；产物在 `build/libs/sable-fabric-26.3-<version>.jar`。
-- 移植过程中每个被修改的文件都保留了 `.bak` 备份；这些备份已在 `processResources` 中排除，不会进入产物。
 
 ## 2. Mixin 配置（最关键的坑）
 
