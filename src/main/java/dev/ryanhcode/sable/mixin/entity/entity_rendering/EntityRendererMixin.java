@@ -37,7 +37,7 @@ public abstract class EntityRendererMixin {
 
     // mc26.1: Entity#getBoundingBoxForCulling moved onto EntityRenderer.
     @Shadow
-    protected abstract AABB getBoundingBoxForCulling(Entity entity);
+    protected abstract AABB getBoundingBoxForCulling(Entity entity, float partialTicks);
 
     // mc26.1: Entity#noCulling became EntityRenderer#affectedByCulling.
     @Shadow
@@ -56,7 +56,7 @@ public abstract class EntityRendererMixin {
                 sable$getSubLevelAccountedSkyLight(original, arg.level(), LightLayer.SKY, blockpos, lightProbePosition));
     }
 
-    @Redirect(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/entity/EntityRenderDispatcher;distanceToSqr(Lnet/minecraft/world/entity/Entity;)D"))
+    @Redirect(method = "extractNameTags(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/entity/state/EntityRenderState;FDD)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/entity/EntityRenderDispatcher;distanceToSqr(Lnet/minecraft/world/entity/Entity;)D"))
     private double sable$distanceToCamera(final EntityRenderDispatcher dispatcher, final Entity entity) {
         return Sable.HELPER.distanceSquaredWithSubLevels(entity.level(), Minecraft.getInstance().gameRenderer.mainCamera().position(), entity.position());
     }
@@ -109,7 +109,7 @@ public abstract class EntityRendererMixin {
     }
 
     @Inject(method = "shouldRender", at = @At("HEAD"), cancellable = true)
-    private <E extends Entity> void sable$shouldRender(final E entity, final Frustum frustum, final double pCamX, final double pCamY, final double pCamZ, final CallbackInfoReturnable<Boolean> cir) {
+    private <E extends Entity> void sable$shouldRender(final E entity, final Frustum culler, final double camX, final double camY, final double camZ, final float partialTicks, final CallbackInfoReturnable<Boolean> cir) {
         if (!this.affectedByCulling(entity)) {
             cir.setReturnValue(true);
             return;
@@ -121,7 +121,7 @@ public abstract class EntityRendererMixin {
             final Vec3 globalPos = subLevel.renderPose().transformPosition(entity.position());
             final AABB aabb = new AABB(globalPos.x - 2.0D, globalPos.y - 2.0D, globalPos.z - 2.0D, globalPos.x + 2.0D, globalPos.y + 2.0D, globalPos.z + 2.0D);
 
-            cir.setReturnValue(frustum.isVisible(aabb));
+            cir.setReturnValue(culler.isVisible(aabb));
 
             return;
         }
@@ -135,20 +135,20 @@ public abstract class EntityRendererMixin {
                     .subtract(0.0, entity.getEyeHeight(), 0.0);
 
 
-            AABB aABB = this.getBoundingBoxForCulling(entity).inflate(0.5);
+            AABB aABB = this.getBoundingBoxForCulling(entity, partialTicks).inflate(0.5);
             if (aABB.hasNaN() || aABB.getSize() == 0.0) {
                 aABB = new AABB(entity.getX() - 2.0, entity.getY() - 2.0, entity.getZ() - 2.0, entity.getX() + 2.0, entity.getY() + 2.0, entity.getZ() + 2.0);
             }
 
             aABB = aABB.move(positionInterpolated.subtract(entity.position()));
 
-            if (frustum.isVisible(aABB)) {
+            if (culler.isVisible(aABB)) {
                 cir.setReturnValue(true);
             } else {
                 if (entity instanceof final Leashable leashable) {
                     final Entity entity2 = leashable.getLeashHolder();
                     if (entity2 != null) {
-                        cir.setReturnValue(frustum.isVisible(this.getBoundingBoxForCulling(entity2)));
+                        cir.setReturnValue(culler.isVisible(this.getBoundingBoxForCulling(entity2, partialTicks)));
                         return;
                     }
                 }
