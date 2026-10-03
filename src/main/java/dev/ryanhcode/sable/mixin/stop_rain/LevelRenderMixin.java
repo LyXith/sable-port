@@ -57,21 +57,12 @@ public class LevelRenderMixin {
         return maxHeight;
     }
 
-    @WrapOperation(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;getHeight(Lnet/minecraft/world/level/levelgen/Heightmap$Types;II)I"))
-    public int sable$preventRainThoughSubLevel(final Level instance, final Heightmap.Types types, final int i, final int j, final Operation<Integer> original) {
+    @WrapOperation(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ClientLevel;getHeight(Lnet/minecraft/world/level/levelgen/Heightmap$Types;II)I"))
+    public int sable$preventRainThoughSubLevel(final ClientLevel instance, final Heightmap.Types types, final int i, final int j, final Operation<Integer> original) {
         return Math.max(original.call(instance, types, i, j), sable$getSubLevelHeight(instance, i, 1, j));
     }
 
-    @WrapOperation(method = "tickRainParticles", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ClientLevel;getHeightmapPos(Lnet/minecraft/world/level/levelgen/Heightmap$Types;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/core/BlockPos;"))
-    public BlockPos sable$stopSplashParticles(final ClientLevel instance, final Heightmap.Types types, final BlockPos blockPos, final Operation<BlockPos> original) {
-        int height = original.call(instance, types, blockPos).getY();
-        if (instance instanceof final Level level) {
-            height = Math.max(height, sable$getSubLevelHeight(level, blockPos.getX(), 2, blockPos.getZ()));
-        }
-
-        return new BlockPos(blockPos.getX(), height, blockPos.getZ());
-    }
-
-
+    // mc26.3: WeatherEffectRenderer#tickRainParticles no longer exists (splash
+    // rain particles were removed), so this redirect has no target.
 
 }

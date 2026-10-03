@@ -4,6 +4,7 @@ import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.mixinterface.plot.SubLevelContainerHolder;
 import dev.ryanhcode.sable.sublevel.plot.LevelPlot;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.world.level.ChunkPos;
@@ -30,7 +31,7 @@ public interface BlockAndTintGetterMixin {
             final SubLevelContainer plotContainer = holder.sable$getPlotContainer();
 
             if (plotContainer.getLevel() instanceof ServerLevel) {
-                final LevelPlot plot = plotContainer.getPlot(new ChunkPos(blockPos.getX(),blockPos.getZ()));
+                final LevelPlot plot = plotContainer.getPlot(new ChunkPos(SectionPos.blockToSectionCoord(blockPos.getX()), SectionPos.blockToSectionCoord(blockPos.getZ())));
 
                 if (plot != null) {
                     engine = plot.getLightEngine();
@@ -53,7 +54,7 @@ public interface BlockAndTintGetterMixin {
             final SubLevelContainer plotContainer = holder.sable$getPlotContainer();
 
             if (plotContainer.getLevel() instanceof ServerLevel) {
-                final LevelPlot plot = plotContainer.getPlot(new ChunkPos(blockPos.getX(),blockPos.getZ()));
+                final LevelPlot plot = plotContainer.getPlot(new ChunkPos(SectionPos.blockToSectionCoord(blockPos.getX()), SectionPos.blockToSectionCoord(blockPos.getZ())));
 
                 if (plot != null) {
                     engine = plot.getLightEngine();

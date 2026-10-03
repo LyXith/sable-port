@@ -17,6 +17,7 @@ import dev.ryanhcode.sable.sublevel.plot.PlotChunkHolder;
 import dev.ryanhcode.sable.sublevel.plot.SubLevelPlayerChunkSender;
 import dev.ryanhcode.sable.sublevel.storage.SubLevelRemovalReason;
 import dev.ryanhcode.sable.network.tcp.SablePacketSink;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
@@ -30,6 +31,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
@@ -47,6 +49,13 @@ public class SubLevelTrackingSystem implements SubLevelObserver {
     private final Set<UUID> currentlyUpdatingPlayers = new ObjectOpenHashSet<>();
     private final Set<UUID> pluginNeededPlayers = new ObjectOpenHashSet<>();
     private final List<SubLevelTrackingPlugin> plugins = new ObjectArrayList<>();
+
+    /**
+     * 记录每个 plot 已经下发过（通过完整同步或增量）的区块，用于发现后来才创建的区块，
+     * 以及避免重复下发。
+     */
+    private final Map<LevelPlot, LongOpenHashSet> syncedChunks = new Object2ObjectOpenHashMap<>();
+
     private int interpolationTick;
     private long lastSendMs = -1;
 
@@ -73,6 +82,7 @@ public class SubLevelTrackingSystem implements SubLevelObserver {
     @Override
     public void onSubLevelRemoved(final SubLevel subLevel, final SubLevelRemovalReason reason) {
         this.additionQueue.remove(subLevel);
+        this.syncedChunks.remove(subLevel.getPlot());
         final ServerSubLevel serverSubLevel = (ServerSubLevel) subLevel;
         this.sendRemoval(this.serverWidePlayerSink(serverSubLevel), serverSubLevel);
     }
@@ -118,8 +128,16 @@ public class SubLevelTrackingSystem implements SubLevelObserver {
             packets.add(new ClientboundCustomPayloadPacket(extraPacket));
         }
 
-        for (final PlotChunkHolder chunk : chunks) {
-            SubLevelPlayerChunkSender.sendChunk(packets::add, plot.getLightEngine(), chunk.getChunk());
+        final LongOpenHashSet synced = this.syncedChunks.computeIfAbsent(plot, x -> new LongOpenHashSet());
+
+        for (final PlotChunkHolder holder : chunks) {
+            final LevelChunk chunk = holder.getChunk();
+            SubLevelPlayerChunkSender.sendChunk(packets::add, plot.getLightEngine(), chunk);
+            synced.add(ChunkPos.pack(chunk.getPos().x, chunk.getPos().z));
+            // Intentionally do NOT clear networkDirty here: sendChunkUpdates runs
+            // later in the same tick and re-sends any chunk whose blocks/light
+            // changed, which guarantees the freshly-populated plot reaches the
+            // client even if this full sync raced the block placement.
         }
 
         packets.add(new ClientboundCustomPayloadPacket(new ClientboundFinalizeSubLevelPacket(l)));
@@ -226,7 +244,71 @@ public class SubLevelTrackingSystem implements SubLevelObserver {
 
         // send positional updates separately
         this.sendBoundsUpdates(container);
+        this.sendChunkUpdates(container);
         this.sendMovementUpdates(container);
+    }
+
+    /**
+     * 把新建的、或内容已经变化（例如在区块边界放置方块）的 plot 区块增量下发到正在追踪该子关卡的客户端。
+     * <p>
+     * 完整同步（{@link #sendFullSync}）只在玩家开始追踪时发生，之后客户端不会自动收到新创建区块的数据，
+     * 因此需要在这里补齐，否则会出现“服务端放下了、客户端要重进才看得到”的现象。
+     */
+    private void sendChunkUpdates(final SubLevelContainer container) {
+        for (final SubLevel subLevel : container.getAllSubLevels()) {
+            if (subLevel.isRemoved() || !(subLevel instanceof final ServerSubLevel serverSubLevel)) {
+                continue;
+            }
+
+            final Collection<UUID> tracking = serverSubLevel.getTrackingPlayers();
+            if (tracking.isEmpty()) {
+                continue;
+            }
+
+            final LevelPlot plot = subLevel.getPlot();
+            final LongOpenHashSet synced = this.syncedChunks.computeIfAbsent(plot, x -> new LongOpenHashSet());
+
+            for (final PlotChunkHolder holder : plot.getLoadedChunks()) {
+                final LevelChunk chunk = holder.getChunk();
+                if (chunk == null) {
+                    continue;
+                }
+
+                final long key = ChunkPos.pack(chunk.getPos().x, chunk.getPos().z);
+                final boolean isNew = !synced.contains(key);
+
+                if (!isNew && !holder.isNetworkDirty()) {
+                    continue;
+                }
+
+                this.sendChunkToTrackingPlayers(plot, chunk, tracking);
+                synced.add(key);
+                holder.clearNetworkDirty();
+            }
+
+            // 清理已经不再加载的区块，避免集合无限增长
+            synced.retainAll(this.collectLoadedChunkKeys(plot));
+        }
+    }
+
+    private LongOpenHashSet collectLoadedChunkKeys(final LevelPlot plot) {
+        final LongOpenHashSet keys = new LongOpenHashSet();
+        for (final PlotChunkHolder holder : plot.getLoadedChunks()) {
+            final LevelChunk chunk = holder.getChunk();
+            if (chunk != null) {
+                keys.add(ChunkPos.pack(chunk.getPos().x, chunk.getPos().z));
+            }
+        }
+        return keys;
+    }
+
+    private void sendChunkToTrackingPlayers(final LevelPlot plot, final LevelChunk chunk, final Collection<UUID> tracking) {
+        for (final UUID uuid : tracking) {
+            final ServerPlayer player = this.level.getServer().getPlayerList().getPlayer(uuid);
+            if (player != null) {
+                SubLevelPlayerChunkSender.sendChunk(player.connection::send, plot.getLightEngine(), chunk);
+            }
+        }
     }
 
     /**

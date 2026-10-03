@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.SignBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SignTextSlot;
 import net.minecraft.world.level.block.state.BlockState;
 import org.joml.Vector3d;
 import org.spongepowered.asm.mixin.Mixin;
@@ -31,7 +32,7 @@ public abstract class SignBlockEntityMixin extends BlockEntity {
      * @reason Overwrite to fix sign face interaction
      */
     @Overwrite
-    public boolean isFacingFrontText(final Player player) {
+    public SignTextSlot getSlotPlayerIsFacing(final Player player) {
         final BlockState state = this.getBlockState();
         final Block block = state.getBlock();
         if (block instanceof final SignBlock signBlock) {
@@ -50,9 +51,9 @@ public abstract class SignBlockEntityMixin extends BlockEntity {
                 subLevel.logicalPose().transformNormal(signNormal);
             }
 
-            return signNormal.dot(deltaDir.x, deltaDir.y, deltaDir.z) > 0.0;
+            return signNormal.dot(deltaDir.x, deltaDir.y, deltaDir.z) > 0.0 ? SignTextSlot.FRONT : SignTextSlot.BACK;
         } else {
-            return false;
+            return SignTextSlot.FRONT;
         }
     }
 

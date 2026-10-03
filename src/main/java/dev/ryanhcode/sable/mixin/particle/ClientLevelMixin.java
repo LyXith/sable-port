@@ -81,25 +81,8 @@ public abstract class ClientLevelMixin extends Level {
         return Sable.HELPER.distanceSquaredWithSubLevels(this, cameraPosition, x, y, z);
     }
 
-    @Redirect(method = "addBreakingBlockEffect", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/particle/TerrainParticle;setPower(F)Lnet/minecraft/client/particle/Particle;"))
-    private Particle sable$addCrackParticle(final TerrainParticle particle, final float power, @Local(argsOnly = true) final BlockPos pos, @Local final BlockState state) {
-        final Vec3 particlePosition = new Vec3(particle.x, particle.y, particle.z);
-        final SubLevel subLevel = Sable.HELPER.getContaining(this, particlePosition);
-        if (subLevel == null) {
-            return particle.setPower(power);
-        }
-
-        final Vec3 globalVelocity = subLevel.logicalPose().transformNormal(new Vec3(particle.xd, particle.yd, particle.zd));
-        particle.xd = globalVelocity.x;
-        particle.yd = globalVelocity.y;
-        particle.zd = globalVelocity.z;
-        particle.setPower(power);
-
-        final Vec3 localVelocity = subLevel.logicalPose().transformNormalInverse(new Vec3(particle.xd, particle.yd, particle.zd));
-        particle.xd = localVelocity.x;
-        particle.yd = localVelocity.y;
-        particle.zd = localVelocity.z;
-        ((ParticleExtension) particle).sable$setTrackingSubLevel((ClientSubLevel) subLevel, particlePosition);
-        return particle;
-    }
+    // mc26.3: ClientLevel#addBreakingBlockEffect was replaced by
+    // addDestroyBlockEffect, which no longer goes through
+    // TerrainParticle#setPower (that method was removed), so this redirect has
+    // no target. Sub-level block-breaking particles are no longer adjusted.
 }

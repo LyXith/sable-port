@@ -6,6 +6,7 @@ import dev.ryanhcode.sable.api.sublevel.ClientSubLevelContainer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.compatibility.entityculling.EntityCullingCompat;
 import dev.ryanhcode.sable.mixinterface.BlockEntityRenderDispatcherExtension;
+import dev.ryanhcode.sable.mixinterface.sublevel_render.BlockEntityTransformsHolder;
 import dev.ryanhcode.sable.mixinterface.sublevel_render.SubLevelBlockEntityRenderExtension;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
 import dev.ryanhcode.sable.sublevel.plot.PlotChunkHolder;
@@ -63,7 +64,7 @@ public class LevelExtractorMixin implements SubLevelBlockEntityRenderExtension {
             final float partialTick,
             final LevelRenderState levelRenderState
     ) {
-        this.levelRenderer.sable$blockEntityTransforms.clear();
+        ((BlockEntityTransformsHolder) this.levelRenderer).sable$getBlockEntityTransforms().clear();
         levelRenderState.blockEntityRenderStates.removeIf(state -> Sable.HELPER.getContainingClient(state.blockPos) != null);
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) {
@@ -117,7 +118,7 @@ public class LevelExtractorMixin implements SubLevelBlockEntityRenderExtension {
                                     BlockPos.containing(physicalCenter.x, physicalCenter.y, physicalCenter.z)
                             );
                             levelRenderState.blockEntityRenderStates.add(renderState);
-                            this.levelRenderer.sable$blockEntityTransforms.put(renderState, new LevelRendererMixin.SableBlockEntityTransform(transformation, (Vector3d) rotationPoint, new Quaternionf(subLevel.renderPose(partialTick).orientation())));
+                            ((BlockEntityTransformsHolder) this.levelRenderer).sable$getBlockEntityTransforms().put(renderState, new BlockEntityTransformsHolder.SableBlockEntityTransform(transformation, (Vector3d) rotationPoint, new Quaternionf(subLevel.renderPose(partialTick).orientation())));
                         }
                     }
                 } finally {

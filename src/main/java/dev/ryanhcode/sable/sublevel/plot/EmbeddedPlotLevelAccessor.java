@@ -259,7 +259,11 @@ public class EmbeddedPlotLevelAccessor implements CommonLevelAccessor, ServerLev
 
     @Override
     public boolean setBlock(final BlockPos blockPos, final BlockState blockState, final int i, final int j) {
-        return this.level.setBlock(blockPos.offset(this.center), blockState, i, j);
+        final BlockPos globalPos = blockPos.offset(this.center);
+        // 目标区块可能尚未在 plot 中创建（例如放置点位于区块边界），先补齐，
+        // 否则 level.setBlock 会因目标 chunk 不存在而失败。
+        this.plot.ensureChunkFor(globalPos);
+        return this.level.setBlock(globalPos, blockState, i, j);
     }
 
     @Override

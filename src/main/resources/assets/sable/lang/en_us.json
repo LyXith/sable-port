@@ -147,5 +147,119 @@
   "death.attack.fall.from_sublevel": "%1$s fell from %2$s",
 
   "sable.create.mechanical_arm.points_removed_sublevel_and_range": "%1$s selected interaction point(s) removed due to range limitations or not being anchored.",
-  "sable.create.remove.points_removed_sublevel" : "%1$s selected interaction point(s) removed due to not being anchored"
+  "sable.create.remove.points_removed_sublevel" : "%1$s selected interaction point(s) removed due to not being anchored",
+
+  "sable.configuration.title": "Sable Configuration",
+
+  "sable.configuration.section.sable.common.toml": "Common",
+
+  "sable.configuration.section.sable.common.toml.title": "Sable Common Configuration",
+
+  "sable.configuration.section.sable.client.toml": "Client",
+
+  "sable.configuration.section.sable.client.toml.title": "Sable Client Configuration",
+
+  "sable.configuration.section.sable.server.toml": "Server",
+
+  "sable.configuration.section.sable.server.toml.title": "Sable Server Configuration",
+
+  "sable.configuration.sub_level_splitting": "Sub-Level Splitting",
+
+  "sable.configuration.sub_level_splitting.tooltip": "Whether sub-levels can split when parts are separated.",
+
+  "sable.configuration.sub_level_splitting_heatmap_steps": "Splitting Heatmap Steps",
+
+  "sable.configuration.sub_level_splitting_heatmap_steps.tooltip": "Sub-level splitting heatmap steps that take place per tick.",
+
+  "sable.configuration.sub_level_tracking_range": "Tracking Range",
+
+  "sable.configuration.sub_level_tracking_range.tooltip": "The distance at which sub-levels are networked to players.",
+
+  "sable.configuration.sub_levels_with_players_cannot_unload": "Keep Sub-Levels With Players Loaded",
+
+  "sable.configuration.sub_levels_with_players_cannot_unload.tooltip": "Keeps sub-levels with intersecting players from unloading.",
+
+  "sable.configuration.sub_level_remove_min": "Minimum Y",
+
+  "sable.configuration.sub_level_remove_min.tooltip": "The minimum Y coordinate sub-levels can exist at.",
+
+  "sable.configuration.sub_level_remove_max": "Maximum Y",
+
+  "sable.configuration.sub_level_remove_max.tooltip": "The maximum Y coordinate sub-levels can exist at.",
+
+  "sable.configuration.sub_level_velocity_retained_on_load": "Velocity Retained On Load",
+
+  "sable.configuration.sub_level_velocity_retained_on_load.tooltip": "The fraction of velocity retained when a sub-level is loaded (0 = none, 1 = all).",
+
+  "sable.configuration.sub_level_punch_strength_multiplier": "Punch Strength Multiplier",
+
+  "sable.configuration.sub_level_punch_strength_multiplier.tooltip": "The strength multiplier applied to sub-level punching impulses.",
+
+  "sable.configuration.sub_level_punch_downward_strength_multiplier": "Punch Downward Strength Multiplier",
+
+  "sable.configuration.sub_level_punch_downward_strength_multiplier.tooltip": "The strength multiplier applied to the vertical component of downward sub-level punches.",
+
+  "sable.configuration.sub_level_punch_cooldown_ticks": "Punch Cooldown (ticks)",
+
+  "sable.configuration.sub_level_punch_cooldown_ticks.tooltip": "The cooldown in ticks between sub-level punches.",
+
+  "sable.configuration.disable_udp_pipeline": "Disable UDP Pipeline",
+
+  "sable.configuration.disable_udp_pipeline.tooltip": "Disables the entire Sable UDP networking pipeline. Better compatibility, but worse networking performance and latency.",
+
+  "sable.configuration.attempt_udp_networking": "Attempt UDP Networking",
+
+  "sable.configuration.attempt_udp_networking.tooltip": "Whether Sable should attempt to send sub-level movement data over UDP.",
+
+  "sable.configuration.sub_level_saving_log_message": "Log Sub-Level Saves",
+
+  "sable.configuration.sub_level_saving_log_message.tooltip": "Whether to log when sub-levels are saved for a dimension.",
+
+  "sable.configuration.verbose_serialization_logging": "Verbose Serialization Logging",
+
+  "sable.configuration.verbose_serialization_logging.tooltip": "Verbose logging for serialization and the holding chunk map. Debug only.",
+
+  "sable.configuration.sub_level_substeps_per_tick": "Physics Substeps Per Tick",
+
+  "sable.configuration.sub_level_substeps_per_tick.tooltip": "How many times the physics simulation is stepped each tick. Higher is more accurate but more expensive.",
+
+  "sable.configuration.sub_level_dynamic_shading": "Dynamic Shading",
+
+  "sable.configuration.sub_level_dynamic_shading.tooltip": "Whether sub-levels apply block shading dynamically.",
+
+  "sable.configuration.sub_level_water_occlusion": "Water Occlusion",
+
+  "sable.configuration.sub_level_water_occlusion.tooltip": "Whether sub-levels can occlude the water surface.",
+
+  "sable.configuration.sub_level_skylight_shadows": "Skylight Shadows",
+
+  "sable.configuration.sub_level_skylight_shadows.tooltip": "Whether sub-levels cast a shadow on the world.",
+
+  "sable.configuration.debug_draw_loaded_chunks": "Debug: Draw Loaded Chunks",
+
+  "sable.configuration.debug_draw_loaded_chunks.tooltip": "Draw loaded chunks in the chunk debug renderer.",
+
+  "sable.configuration.sub_level_occlusion_culling": "Occlusion Culling",
+
+  "sable.configuration.sub_level_occlusion_culling.tooltip": "Cull sub-level sections hidden behind other sections, like vanilla's section occlusion graph.",
+
+  "sable.configuration.sub_level_cull_enclosed_blocks": "Cull Enclosed Blocks",
+
+  "sable.configuration.sub_level_cull_enclosed_blocks.tooltip": "Skip sub-level blocks fully enclosed by opaque neighbours (the interior of solid structures).",
+
+  "sable.configuration.sub_level_render_distance": "Render Distance",
+
+  "sable.configuration.sub_level_render_distance.tooltip": "Maximum render distance (in blocks) for sub-levels. -1 disables distance culling.",
+
+  "sable.configuration.sub_level_snapshot_interpolation_delay_ticks": "Interpolation Delay (ticks)",
+
+  "sable.configuration.sub_level_snapshot_interpolation_delay_ticks.tooltip": "How far back, in game ticks, snapshot interpolation runs.",
+
+  "sable.configuration.sub_level_renderer": "Renderer",
+
+  "sable.configuration.sub_level_renderer.tooltip": "The renderer used for sub-levels.",
+
+  "sable.configuration.sub_level_zoom_sensitivity": "Zoom Sensitivity",
+
+  "sable.configuration.sub_level_zoom_sensitivity.tooltip": "Zoom sensitivity for sub-level camera types."
 }

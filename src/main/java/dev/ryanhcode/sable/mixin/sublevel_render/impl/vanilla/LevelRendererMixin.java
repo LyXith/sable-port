@@ -1,58 +1,136 @@
 package dev.ryanhcode.sable.mixin.sublevel_render.impl.vanilla;
 
-import com.mojang.renderpearl.api.buffers.GpuBuffer;
-import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
-import com.mojang.renderpearl.api.commands.RenderPass;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
 import dev.ryanhcode.sable.Sable;
+import dev.ryanhcode.sable.SableClientConfig;
 import dev.ryanhcode.sable.api.sublevel.ClientSubLevelContainer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
+import dev.ryanhcode.sable.client.rope.RopeManager;
+import dev.ryanhcode.sable.companion.math.BoundingBox3ic;
+import dev.ryanhcode.sable.companion.math.Pose3dc;
 import dev.ryanhcode.sable.mixinterface.plot.SubLevelContainerHolder;
-import dev.ryanhcode.sable.platform.SableLoaderPlatform;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
+import dev.ryanhcode.sable.sublevel.render.SubLevelMovingBlockRenderState;
 import dev.ryanhcode.sable.sublevel.render.SubLevelRenderData;
-import dev.ryanhcode.sable.sublevel.render.dispatcher.SubLevelRenderDispatcher;
-import dev.ryanhcode.sable.sublevel.render.vanilla.VanillaChunkedSubLevelRenderData;
+import dev.ryanhcode.sable.sublevel.plot.LevelPlot;
+import dev.ryanhcode.sable.sublevel.plot.PlotChunkHolder;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.PrioritizeChunkUpdates;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.DynamicUniforms;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
-import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.block.MovingBlockRenderState;
 import net.minecraft.client.renderer.chunk.RenderRegionCache;
-import net.minecraft.client.renderer.chunk.SectionBuffers;
-import net.minecraft.client.renderer.chunk.SectionMesh;
-import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.state.level.BlockOutlineRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
+import it.unimi.dsi.fastutil.longs.LongSets;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
-import net.minecraft.util.profiling.ProfilerFiller;
+import net.minecraft.util.ARGB;
+import net.minecraft.util.Mth;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Nullable;
-import org.joml.Matrix4f;
-import org.joml.Matrix4fc;
+import org.joml.Quaternionf;
 import org.joml.Vector3dc;
-import org.joml.Vector3f;
-import org.joml.Vector4f;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.EnumMap;
-import java.util.List;
-
 
 @Mixin(value = LevelRenderer.class, priority = 1002)
 public abstract class LevelRendererMixin {
 
+    @Unique
+    private final Quaternionf sable$subLevelRotation = new Quaternionf();
+
+    @Shadow
+    @Final
+    private GameRenderer gameRenderer;
+
+    @Shadow
+    private void submitHitOutline(final PoseStack poseStack, final SubmitNodeCollector collector, final RenderType renderType, final BlockOutlineRenderState state, final int color, final float width, final boolean afterTerrain) {
+    }
+
+    // The selected block's outline state carries the plot-space BlockPos for
+    // sub-level blocks, which vanilla then renders at that far-away coordinate
+    // (i.e. invisible). Re-submit it with the sub-level pose applied.
+    @Inject(method = "submitBlockOutline", at = @At("HEAD"), cancellable = true)
+    private void sable$submitSubLevelBlockOutline(final PoseStack poseStack, final SubmitNodeCollector collector, final LevelRenderState levelRenderState, final CallbackInfo ci) {
+        final BlockOutlineRenderState state = levelRenderState.blockOutlineRenderState;
+        if (state == null) {
+            return;
+        }
+
+        final ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) {
+            return;
+        }
+
+        final BlockPos pos = state.pos();
+        if (!(Sable.HELPER.getContaining(level, pos) instanceof final ClientSubLevel subLevel)) {
+            return;
+        }
+
+        final Vec3 cameraPos = levelRenderState.cameraRenderState.pos;
+        final Pose3dc pose = subLevel.renderPose();
+        final Vector3dc rotationPoint = pose.rotationPoint();
+        final Vector3dc scale = pose.scale();
+
+        poseStack.pushPose();
+        poseStack.translate(pose.position().x() - cameraPos.x, pose.position().y() - cameraPos.y, pose.position().z() - cameraPos.z);
+        poseStack.rotate(this.sable$subLevelRotation.set(pose.orientation()));
+        poseStack.scale((float) scale.x(), (float) scale.y(), (float) scale.z());
+        poseStack.translate(pos.getX() - rotationPoint.x(), pos.getY() - rotationPoint.y(), pos.getZ() - rotationPoint.z());
+
+        final boolean highContrast = state.highContrast();
+        if (highContrast) {
+            this.submitHitOutline(poseStack, collector, RenderTypes.secondaryBlockOutline(), state, -16777216, 7.0F, state.isTranslucent());
+        }
+
+        final int color = highContrast ? -11010079 : ARGB.black(102);
+        final RenderType renderType;
+        if (highContrast) {
+            renderType = RenderTypes.linesDepthBias();
+        } else if (this.gameRenderer.useImprovedTransparency()) {
+            renderType = RenderTypes.linesTranslucentNoDepthWrite();
+        } else {
+            renderType = RenderTypes.linesTranslucent();
+        }
+
+        this.submitHitOutline(
+                poseStack,
+                collector,
+                renderType,
+                state,
+                color,
+                this.gameRenderer.gameRenderState().windowRenderState.appropriateLineWidth,
+                state.isTranslucent()
+        );
+        poseStack.popPose();
+        ci.cancel();
+    }
 
     @Inject(method = "compileSections", at = @At("TAIL"))
     private void sable$compileSections(CameraRenderState camera, CallbackInfo ci) {
@@ -67,113 +145,296 @@ public abstract class LevelRendererMixin {
         }
     }
 
-    @Inject(method = "cullTerrain", at = @At("HEAD"))
-    public void sable$cull(final Camera camera, final Frustum frustum, final boolean spectator, final CallbackInfo ci) {
-        final SubLevelRenderDispatcher dispatcher = SubLevelRenderDispatcher.get();
-        dispatcher.preRenderChunks(camera);
-
-        final ProfilerFiller profiler = net.minecraft.util.profiling.Profiler.get();
-        profiler.push("sub_level_section_occlusion_graph");
-        ClientLevel level = Minecraft.getInstance().level;
-        final Iterable<ClientSubLevel> sublevels = ((ClientSubLevelContainer) ((SubLevelContainerHolder) level).sable$getPlotContainer()).getAllSubLevels();
-        final Vec3 cameraPosition = camera.position();
-        dispatcher.updateCulling(sublevels, cameraPosition.x, cameraPosition.y, cameraPosition.z, frustum, spectator);
-
-        profiler.pop();
-    }
-
-    @Inject(method = "prepareChunkRenders", at = @At("RETURN"), cancellable = true)
-    private void sable$appendSubLevelSections(Matrix4fc modelViewMatrix, boolean respectTranslucentOrder, CallbackInfoReturnable<ChunkSectionsToRender> cir) {
-        // Sodium cancels the vanilla renderGroup implementation. Its dedicated
-        // mixin renders sub-level meshes after each Sodium terrain group instead.
-        if (SableLoaderPlatform.INSTANCE.isModLoaded("sodium")) {
-            return;
-        }
-        ClientLevel level = Minecraft.getInstance().level;
-        if (level == null) {
+    // mc26.3: the terrain pipeline (ChunkSectionsToRender / ChunkSectionInfo) no
+    // longer carries a per-section matrix, so sub-level sections cannot be
+    // rotated through it. Vanilla's moving-block path (used for pistons) does
+    // support a full PoseStack, so submit each sub-level block as a moving block
+    // instead. This gives correct rotation, scaling and sub-block positions.
+    @Inject(method = "submitTransientBlocks", at = @At("TAIL"))
+    private void sable$submitSubLevelBlocks(final PoseStack poseStack, final SubmitNodeCollector collector, final LevelRenderState levelRenderState, final CallbackInfo ci) {
+        final ClientLevel clientLevel = Minecraft.getInstance().level;
+        if (clientLevel == null) {
             return;
         }
 
-        final ClientSubLevelContainer container = SubLevelContainer.getContainer(level);
+        final ClientSubLevelContainer container = SubLevelContainer.getContainer(clientLevel);
         if (container == null) {
             return;
         }
 
-        final ChunkSectionsToRender original = cir.getReturnValue();
-        final EnumMap<ChunkSectionLayer, List<RenderPass.Draw<GpuBufferSlice[]>>> drawsPerLayer = new EnumMap<>(ChunkSectionLayer.class);
-        for (final ChunkSectionLayer layer : ChunkSectionLayer.values()) {
-            final List<RenderPass.Draw<GpuBufferSlice[]>> existingDraws = ((ChunkSectionsToRender.DrawSeparate) original).drawsPerLayer.get(layer);
-            drawsPerLayer.put(layer, existingDraws == null ? new ArrayList<>() : new ArrayList<>(existingDraws));
-        }
+        final Vec3 cameraPos = levelRenderState.cameraRenderState.pos;
+        final double camX = cameraPos.x;
+        final double camY = cameraPos.y;
+        final double camZ = cameraPos.z;
 
-        final int originalTransformCount = original.dynamicTransforms().length;
-        final List<DynamicUniforms.Transform> transforms = new ArrayList<>();
-        final Vector4f white = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
-        final Matrix4f textureMatrix = new Matrix4f();
-        int maxIndicesRequired = original.maxIndicesRequired;
+        final Frustum frustum = Minecraft.getInstance().gameRenderer.mainCamera().getCullFrustum();
+
+        final boolean occlusionCulling = SableClientConfig.SUB_LEVEL_OCCLUSION_CULLING.get();
+        final boolean cullEnclosedBlocks = SableClientConfig.SUB_LEVEL_CULL_ENCLOSED_BLOCKS.get();
+        final double renderDistance = SableClientConfig.SUB_LEVEL_RENDER_DISTANCE.get();
+        final double renderDistanceSq = renderDistance <= 0.0 ? Double.POSITIVE_INFINITY : renderDistance * renderDistance;
 
         for (final ClientSubLevel subLevel : container.getAllSubLevels()) {
-            if (!(subLevel.getRenderData() instanceof final VanillaChunkedSubLevelRenderData renderData)) {
+            final LevelPlot plot = subLevel.getPlot();
+            final BoundingBox3ic bounds = plot.getBoundingBox();
+            if (bounds == null || bounds.volume() <= 0.0) {
                 continue;
             }
 
-            final Matrix4f modelView = new Matrix4f(baseModelView).mul(renderData.getTransformation(cameraX, cameraY, cameraZ));
-            final Vector3dc rotationPoint = subLevel.renderPose().rotationPoint();
+            final Pose3dc pose = subLevel.renderPose();
+            final Vector3dc position = pose.position();
+            final Vector3dc rotationPoint = pose.rotationPoint();
+            final Vector3dc scale = pose.scale();
+            this.sable$subLevelRotation.set(pose.orientation());
 
-            for (final SectionRenderDispatcher.RenderSection section : renderData.allRenderSections()) {
-                final SectionMesh mesh = section.getSectionMesh();
-                final BlockPos origin = section.getRenderOrigin();
+            final Level plotLevel = subLevel.getLevel();
 
-                for (final ChunkSectionLayer layer : ChunkSectionLayer.values()) {
-                    final SectionBuffers buffers = mesh.getBuffers(layer);
-                    if (buffers == null) {
+            // 距离剔除：整个子关卡远到看不见时直接跳过。
+            final Vec3 worldCenter = pose.transformPosition(new Vec3(
+                    (bounds.minX() + bounds.maxX() + 1) * 0.5,
+                    (bounds.minY() + bounds.maxY() + 1) * 0.5,
+                    (bounds.minZ() + bounds.maxZ() + 1) * 0.5
+            ));
+            if (worldCenter.distanceToSqr(cameraPos) > renderDistanceSq) {
+                continue;
+            }
+
+            // 遮挡剔除：从相机所在 section 出发，只穿过非全不透明面扩散。
+            final LongSet visibleSections = occlusionCulling ? sable$computeVisibleSections(plot, pose, cameraPos) : null;
+
+            // 只遍历已加载区块中的非空 section，并按视锥剔除。
+            for (final PlotChunkHolder holder : plot.getLoadedChunks()) {
+                final LevelChunk chunk = holder.getChunk();
+                if (chunk == null) {
+                    continue;
+                }
+
+                final ChunkPos chunkPos = chunk.getPos();
+                final LevelChunkSection[] sections = chunk.getSections();
+
+                for (int sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+                    final LevelChunkSection section = sections[sectionIndex];
+                    if (section == null || section.hasOnlyAir()) {
                         continue;
                     }
 
-                    final GpuBuffer indexBuffer;
-                    final VertexFormat.IndexType indexType;
-                    if (buffers.getIndexBuffer() == null) {
-                        maxIndicesRequired = Math.max(maxIndicesRequired, buffers.getIndexCount());
-                        indexBuffer = null;
-                        indexType = null;
-                    } else {
-                        indexBuffer = buffers.getIndexBuffer();
-                        indexType = buffers.getIndexType();
+                    final int sectionY = chunk.getSectionYFromSectionIndex(sectionIndex);
+                    if (visibleSections != null && !visibleSections.contains(SectionPos.asLong(chunkPos.x, sectionY, chunkPos.z))) {
+                        continue;
                     }
 
-                    final int transformIndex = originalTransformCount + transforms.size();
-                    transforms.add(new DynamicUniforms.Transform(
-                            modelView,
-                            white,
-                            new Vector3f(
-                                    (float) (origin.getX() - rotationPoint.x()),
-                                    (float) (origin.getY() - rotationPoint.y()),
-                                    (float) (origin.getZ() - rotationPoint.z())
-                            ),
-                            textureMatrix,
-                            1.0F
-                    ));
-                    drawsPerLayer.get(layer).add(new RenderPass.Draw<>(
-                            0,
-                            buffers.getVertexBuffer(),
-                            indexBuffer,
-                            indexType,
-                            0,
-                            buffers.getIndexCount(),
-                            (dynamicTransforms, uploader) -> uploader.upload("DynamicTransforms", dynamicTransforms[transformIndex])
-                    ));
+                    final int sectionMinY = sectionY << 4;
+                    if (frustum != null && !frustum.isVisible(sable$sectionBounds(pose, chunkPos, sectionMinY))) {
+                        continue;
+                    }
+
+                    for (int localX = 0; localX < 16; localX++) {
+                        for (int localY = 0; localY < 16; localY++) {
+                            for (int localZ = 0; localZ < 16; localZ++) {
+                                final BlockState blockState = section.getBlockState(localX, localY, localZ);
+                                if (blockState.isAir()) {
+                                    continue;
+                                }
+
+                                final BlockPos blockPos = new BlockPos(
+                                        (chunkPos.x << 4) + localX,
+                                        sectionMinY + localY,
+                                        (chunkPos.z << 4) + localZ
+                                );
+
+                                // 方块级遮挡剔除：完全被不透明邻居包住的方块从外面看不到，
+                                // 直接跳过（对实心结构是最大的一笔开销节省）。
+                                if (cullEnclosedBlocks && blockState.isSolidRender() && sable$isFullyEnclosed(plotLevel, blockPos)) {
+                                    continue;
+                                }
+
+                                final SubLevelMovingBlockRenderState state = new SubLevelMovingBlockRenderState();
+                                state.sable$setLevel(plotLevel);
+                                state.blockPos = blockPos;
+                                state.randomSeedPos = blockPos;
+                                state.blockState = blockState;
+                                state.biome = plotLevel.getBiome(blockPos);
+                                state.cardinalLighting = ((ClientLevel) plotLevel).cardinalLighting();
+                                state.lightEngine = plotLevel.getLightEngine();
+
+                                poseStack.pushPose();
+                                // plot -> world (camera relative): T(position - camera) * R * S
+                                poseStack.translate(position.x() - camX, position.y() - camY, position.z() - camZ);
+                                poseStack.rotate(this.sable$subLevelRotation);
+                                poseStack.scale((float) scale.x(), (float) scale.y(), (float) scale.z());
+                                poseStack.translate(
+                                        blockPos.getX() - rotationPoint.x(),
+                                        blockPos.getY() - rotationPoint.y(),
+                                        blockPos.getZ() - rotationPoint.z()
+                                );
+                                collector.submitMovingBlock(poseStack, state, 0);
+                                poseStack.popPose();
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        if (transforms.isEmpty()) {
-            return;
+        RopeManager.renderAll(poseStack, collector, cameraPos);
+    }
+
+    @Unique
+    private static boolean sable$isFullyEnclosed(final Level level, final BlockPos pos) {
+        for (final Direction direction : Direction.values()) {
+            if (!level.getBlockState(pos.relative(direction)).canOcclude()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 从相机所在 section 出发，只穿过「非全不透明面」扩散，得到可见 section 集合。
+     * 相机不在结构内时返回全部非空 section（仍会走视锥/距离剔除），避免从外部误剔。
+     */
+    @Unique
+    private static LongSet sable$computeVisibleSections(final LevelPlot plot, final Pose3dc pose, final Vec3 cameraPos) {
+        final Long2ObjectMap<LevelChunkSection> sections = new Long2ObjectOpenHashMap<>();
+
+        for (final PlotChunkHolder holder : plot.getLoadedChunks()) {
+            final LevelChunk chunk = holder.getChunk();
+            if (chunk == null) {
+                continue;
+            }
+
+            final LevelChunkSection[] chunkSections = chunk.getSections();
+            for (int i = 0; i < chunkSections.length; i++) {
+                final LevelChunkSection section = chunkSections[i];
+                if (section == null || section.hasOnlyAir()) {
+                    continue;
+                }
+
+                sections.put(SectionPos.asLong(chunk.getPos().x, chunk.getSectionYFromSectionIndex(i), chunk.getPos().z), section);
+            }
         }
 
-        final GpuBufferSlice[] additionalTransforms = RenderSystem.getDynamicUniforms().writeTransforms(transforms.toArray(DynamicUniforms.Transform[]::new));
-        final GpuBufferSlice[] combinedTransforms = Arrays.copyOf(original.dynamicTransforms(), originalTransformCount + additionalTransforms.length);
-        System.arraycopy(additionalTransforms, 0, combinedTransforms, originalTransformCount, additionalTransforms.length);
-        cir.setReturnValue(new ChunkSectionsToRender(drawsPerLayer, maxIndicesRequired, combinedTransforms));
+        if (sections.isEmpty()) {
+            return LongSets.emptySet();
+        }
+
+        final Vec3 cameraPlot = pose.transformPositionInverse(cameraPos);
+        final long start = SectionPos.asLong(
+                Mth.floor(cameraPlot.x) >> 4,
+                Mth.floor(cameraPlot.y) >> 4,
+                Mth.floor(cameraPlot.z) >> 4
+        );
+
+        if (!sections.containsKey(start)) {
+            return new LongOpenHashSet(sections.keySet());
+        }
+
+        final LongSet visible = new LongOpenHashSet();
+        final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
+
+        visible.add(start);
+        queue.enqueue(start);
+
+        while (!queue.isEmpty()) {
+            final long node = queue.dequeueLong();
+            final LevelChunkSection section = sections.get(node);
+
+            final int x = SectionPos.x(node);
+            final int y = SectionPos.y(node);
+            final int z = SectionPos.z(node);
+
+            for (final Direction direction : Direction.values()) {
+                if (sable$faceOpaque(section, direction)) {
+                    continue;
+                }
+
+                final long next = SectionPos.asLong(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ());
+
+                if (sections.containsKey(next) && visible.add(next)) {
+                    queue.enqueue(next);
+                }
+            }
+        }
+
+        return visible;
+    }
+
+    @Unique
+    private static boolean sable$faceOpaque(final LevelChunkSection section, final Direction direction) {
+        switch (direction) {
+            case DOWN -> {
+                for (int x = 0; x < 16; x++) {
+                    for (int z = 0; z < 16; z++) {
+                        if (!section.getBlockState(x, 0, z).canOcclude()) return false;
+                    }
+                }
+            }
+            case UP -> {
+                for (int x = 0; x < 16; x++) {
+                    for (int z = 0; z < 16; z++) {
+                        if (!section.getBlockState(x, 15, z).canOcclude()) return false;
+                    }
+                }
+            }
+            case NORTH -> {
+                for (int x = 0; x < 16; x++) {
+                    for (int y = 0; y < 16; y++) {
+                        if (!section.getBlockState(x, y, 0).canOcclude()) return false;
+                    }
+                }
+            }
+            case SOUTH -> {
+                for (int x = 0; x < 16; x++) {
+                    for (int y = 0; y < 16; y++) {
+                        if (!section.getBlockState(x, y, 15).canOcclude()) return false;
+                    }
+                }
+            }
+            case WEST -> {
+                for (int y = 0; y < 16; y++) {
+                    for (int z = 0; z < 16; z++) {
+                        if (!section.getBlockState(0, y, z).canOcclude()) return false;
+                    }
+                }
+            }
+            case EAST -> {
+                for (int y = 0; y < 16; y++) {
+                    for (int z = 0; z < 16; z++) {
+                        if (!section.getBlockState(15, y, z).canOcclude()) return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    @Unique
+    private static AABB sable$sectionBounds(final Pose3dc pose, final ChunkPos chunkPos, final int sectionMinY) {
+        final int minX = chunkPos.x << 4;
+        final int minZ = chunkPos.z << 4;
+        double x0 = Double.POSITIVE_INFINITY;
+        double y0 = Double.POSITIVE_INFINITY;
+        double z0 = Double.POSITIVE_INFINITY;
+        double x1 = Double.NEGATIVE_INFINITY;
+        double y1 = Double.NEGATIVE_INFINITY;
+        double z1 = Double.NEGATIVE_INFINITY;
+
+        for (int dx = 0; dx <= 16; dx += 16) {
+            for (int dy = 0; dy <= 16; dy += 16) {
+                for (int dz = 0; dz <= 16; dz += 16) {
+                    final Vec3 corner = pose.transformPosition(new Vec3(minX + dx, sectionMinY + dy, minZ + dz));
+                    x0 = Math.min(x0, corner.x);
+                    y0 = Math.min(y0, corner.y);
+                    z0 = Math.min(z0, corner.z);
+                    x1 = Math.max(x1, corner.x);
+                    y1 = Math.max(y1, corner.y);
+                    z1 = Math.max(z1, corner.z);
+                }
+            }
+        }
+
+        return new AABB(x0, y0, z0, x1, y1, z1);
     }
 
     @Inject(method = "isSectionCompiledAndVisible", at = @At("HEAD"), cancellable = true)

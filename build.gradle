@@ -49,6 +49,31 @@ sourceSets {
             exclude 'dev/ryanhcode/sable/mixin/player_freezing/LocalPlayerMixin.java'
             exclude '**/mixin/loaded_chunk_debug/**'
             exclude '**/mixin/udp/**'
+            // mc26.3 renderpearl rewrite: the legacy Sodium immediate block-model
+            // path (Fabric Renderer v1 render delegates, MultiBufferSource) and
+            // the old debug line renderer (ShapeRenderer/RenderType.lines) no
+            // longer have a 1:1 API. They are stripped exactly like the other
+            // Sodium/debug compatibility files above; the vanilla section path
+            // (impl.vanilla.LevelRendererMixin) remains the active renderer.
+            exclude 'dev/ryanhcode/sable/mixin/sublevel_render/impl/sodium/SodiumWorldRendererMixin.java'
+            exclude 'dev/ryanhcode/sable/mixin/debug_render/SubLevelBoundsRendererMixin.java'
+            exclude 'dev/ryanhcode/sable/api/client/SubLevelBlockEntityRenderRegistry.java'
+            exclude 'dev/ryanhcode/sable/sublevel/render/SubLevelLightVertexConsumerProvider.java'
+            // Block#updateEntityMovementAfterFallOn was removed in 26.3 (fall
+            // behaviour was folded into Entity), so this redirect has no target.
+            exclude 'dev/ryanhcode/sable/mixin/entity/entity_rotations_and_riding/BlockMixin.java'
+            // These mixins target APIs that were reworked by the 26.3 render
+            // state / interface changes, not renamed:
+            //  - BlockAndTintGetter's light getters now live on the parent
+            //    BlockAndLightGetter interface and are handled elsewhere.
+            //  - LevelRenderer#renderBlockOutline was replaced by the submit
+            //    node pipeline (submitBlockOutline/submitHitOutline).
+            exclude 'dev/ryanhcode/sable/mixin/plot/lighting/BlockAndTintGetterMixin.java'
+            exclude 'dev/ryanhcode/sable/fabric/mixin/block_outline_render/LevelRendererMixin.java'
+            // EntityRenderer moved to render-state generics in 26.3
+            // (shouldRender(T, Frustum, ..., float), getBoundingBoxForCulling(T, float),
+            // affectedByCulling(T)); this mixin is built around the old Entity signatures.
+            exclude 'dev/ryanhcode/sable/mixin/entity/entity_rendering/EntityRendererMixin.java'
         }
     }
 }
@@ -128,6 +153,8 @@ processResources {
 
     filesMatching(['fabric.mod.json', '*.mixins.json']) { expand properties }
     inputs.properties(properties)
+    // 本地 .bak 备份不应进入发布产物
+    exclude '**/*.bak'
 }
 
 tasks.withType(JavaCompile).configureEach {

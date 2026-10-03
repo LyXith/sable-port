@@ -20,8 +20,10 @@ public class GameRendererMixin {
 
     @Shadow @Final private Minecraft minecraft;
 
-    @Inject(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;setup(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/world/entity/Entity;ZZF)V", shift = At.Shift.BEFORE))
-    public void sable$setupCamera(final DeltaTracker deltaTracker, final CallbackInfo ci) {
+    // mc26.3: Camera#setup was folded into GameRenderer#extractCamera, which
+    // then drives Camera#extractRenderState.
+    @Inject(method = "extractCamera", at = @At("HEAD"))
+    public void sable$setupCamera(final DeltaTracker deltaTracker, final float partialTick, final CallbackInfo ci) {
         final CameraType cameraType = this.minecraft.options.getCameraType();
 
         if (cameraType == SableCameraTypes.SUB_LEVEL_VIEW || cameraType == SableCameraTypes.SUB_LEVEL_VIEW_UNLOCKED) {

@@ -392,13 +392,42 @@ public abstract class LevelPlot {
             // One block of margin to prevent black face lighting at the edges of chunks
             final BlockPos offsetPos = blockPos.relative(direction, 2);
 
-            final ChunkPos globalChunk = new ChunkPos(offsetPos.getX(), offsetPos.getZ());
+            // blockPos is a global block position; ChunkPos needs chunk coordinates.
+            // (26.3 added ChunkPos#isValid checks in GenerationChunkHolder, so passing
+            // block coordinates here made plot positions look out of bounds.)
+            final ChunkPos globalChunk = new ChunkPos(
+                    SectionPos.blockToSectionCoord(offsetPos.getX()),
+                    SectionPos.blockToSectionCoord(offsetPos.getZ())
+            );
 
-            if (this.getChunk(this.toLocal(globalChunk)) == null) {
-                // Add the chunk if it's missing
-                this.newEmptyChunk(globalChunk);
-            }
+            this.ensureChunkAt(globalChunk);
         }
+    }
+
+    /**
+     * 确保给定全局区块存在于该 plot 网格内；若缺失则创建。
+     *
+     * <p>只对 plot 网格内（local 坐标合法）的区块操作，避免在网格外创建
+     * 越界区块覆盖数据。用于在区块边界放置方块前补齐目标区块。
+     */
+    public void ensureChunkAt(final ChunkPos globalChunk) {
+        final ChunkPos local = this.toLocal(globalChunk);
+        if (local.x < 0 || local.x >= (1 << this.logSize) || local.z < 0 || local.z >= (1 << this.logSize)) {
+            return;
+        }
+        if (this.getChunk(local) == null) {
+            this.newEmptyChunk(globalChunk);
+        }
+    }
+
+    /**
+     * 确保给定全局方块坐标所在的区块存在。
+     */
+    public void ensureChunkFor(final BlockPos globalBlockPos) {
+        this.ensureChunkAt(new ChunkPos(
+                SectionPos.blockToSectionCoord(globalBlockPos.getX()),
+                SectionPos.blockToSectionCoord(globalBlockPos.getZ())
+        ));
     }
 
 

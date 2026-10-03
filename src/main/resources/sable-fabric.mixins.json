@@ -1,11 +1,10 @@
 {
   "required": true,
   "package": "dev.ryanhcode.sable.fabric.mixin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_25",
   "minVersion": "0.8",
   "plugin": "dev.ryanhcode.sable.plugin.SableMixinPlugin",
   "client": [
-    "block_outline_render.LevelRendererMixin",
     "camera_rotation.CameraMixin",
     "compatibility.zume.ModernZumeMixin",
     "fix_bundle_packet.ClientPacketListenerMixin",

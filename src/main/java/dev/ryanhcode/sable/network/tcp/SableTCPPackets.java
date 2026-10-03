@@ -42,6 +42,7 @@ public class SableTCPPackets {
         clientbound(ClientboundFreezePlayerPacket.TYPE, ClientboundFreezePlayerPacket.CODEC);
 
         clientbound(ClientboundPhysicsPropertyPacket.TYPE, ClientboundPhysicsPropertyPacket.CODEC);
+        clientbound(ClientboundRopeSyncPacket.TYPE, ClientboundRopeSyncPacket.CODEC);
         clientbound(ClientboundFloatingBlockMaterialPacket.TYPE, ClientboundFloatingBlockMaterialPacket.CODEC);
         clientbound(ClientboundRecentlySplitSubLevelPacket.TYPE, ClientboundRecentlySplitSubLevelPacket.CODEC);
 
@@ -50,6 +51,7 @@ public class SableTCPPackets {
         clientbound(ClientboundEnterGizmoPacket.TYPE, ClientboundEnterGizmoPacket.CODEC);
 
         serverbound(ServerboundPunchSubLevelPacket.TYPE, ServerboundPunchSubLevelPacket.CODEC);
+        serverbound(ServerboundRemoveRopePacket.TYPE, ServerboundRemoveRopePacket.CODEC);
         serverbound(ServerboundGizmoMoveSubLevelPacket.TYPE, ServerboundGizmoMoveSubLevelPacket.CODEC);
     }
 

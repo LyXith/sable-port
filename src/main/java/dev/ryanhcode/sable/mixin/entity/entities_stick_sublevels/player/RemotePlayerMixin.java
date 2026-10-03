@@ -15,7 +15,8 @@ public abstract class RemotePlayerMixin implements LivingEntityStickExtension {
         this.sable$setupLerp();
     }
 
-    @Inject(method = "aiStep", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/RemotePlayer;updateSwingTime()V", shift = At.Shift.BEFORE))
+    // mc26.3: RemotePlayer#aiStep no longer calls updateSwingTime; apply after the step.
+    @Inject(method = "aiStep", at = @At("TAIL"))
     private void sable$updateSubLevelPosition(final CallbackInfo ci) {
         this.sable$applyLerp();
     }

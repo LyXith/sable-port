@@ -18,8 +18,9 @@ public class RandomPosMixin {
      * @author RyanH
      * @reason Wandering on sub-levels
      */
+    // mc26.3: the toward-direction distance parameter is now a double.
     @Overwrite
-    public static BlockPos generateRandomPosTowardDirection(final PathfinderMob mob, final int xzDist, final RandomSource random, final BlockPos pos) {
+    public static BlockPos generateRandomPosTowardDirection(final PathfinderMob mob, final double xzDist, final RandomSource random, final BlockPos direction) {
         final SubLevel trackingSubLevel = Sable.HELPER.getTrackingSubLevel(mob);
         Vec3 effectiveMobPos = mob.position();
 
@@ -27,25 +28,25 @@ public class RandomPosMixin {
             effectiveMobPos = trackingSubLevel.logicalPose().transformPositionInverse(effectiveMobPos);
         }
 
-        int ox = pos.getX();
-        int oz = pos.getZ();
+        double xt = direction.getX();
+        double zt = direction.getZ();
 
         if (mob.hasHome() && xzDist > 1.0) {
-            final BlockPos blockPos = mob.getHomePosition();
-            if (effectiveMobPos.x() > (double) blockPos.getX()) {
-                ox -= random.nextInt(xzDist / 2);
+            final BlockPos center = mob.getHomePosition();
+            if (effectiveMobPos.x() > (double) center.getX()) {
+                xt -= random.nextDouble() * xzDist / 2.0;
             } else {
-                ox += random.nextInt(xzDist / 2);
+                xt += random.nextDouble() * xzDist / 2.0;
             }
 
-            if (effectiveMobPos.z() > (double) blockPos.getZ()) {
-                oz -= random.nextInt(xzDist / 2);
+            if (effectiveMobPos.z() > (double) center.getZ()) {
+                zt -= random.nextDouble() * xzDist / 2.0;
             } else {
-                oz += random.nextInt(xzDist / 2);
+                zt += random.nextDouble() * xzDist / 2.0;
             }
         }
 
-        return BlockPos.containing(ox + effectiveMobPos.x(), (double) pos.getY() + effectiveMobPos.y(), oz + effectiveMobPos.z());
+        return BlockPos.containing(xt + effectiveMobPos.x(), (double) direction.getY() + effectiveMobPos.y(), zt + effectiveMobPos.z());
     }
 
 }

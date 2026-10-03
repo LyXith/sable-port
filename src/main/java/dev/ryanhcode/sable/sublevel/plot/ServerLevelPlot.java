@@ -206,7 +206,13 @@ public class ServerLevelPlot extends LevelPlot {
             }
         }
 
-        lightEngine.setLightEnabled(pos, chunk.isLightCorrect());
+        // PORT-NOTE(mc26.1): vanilla's ChunkMap enables light for a loaded chunk
+        // (setLightEnabled(pos, true)) BEFORE running the light pass. Enabling it
+        // only afterwards (or keying it off chunk.isLightCorrect(), which is still
+        // false here) leaves the chunk disabled while its initial light is
+        // computed, so light never propagates in from the neighbouring chunk and
+        // the chunk edge that lands on a chunk border stays dark. Enable first.
+        lightEngine.setLightEnabled(pos, true);
         lightEngine.retainData(pos, false);
     }
 

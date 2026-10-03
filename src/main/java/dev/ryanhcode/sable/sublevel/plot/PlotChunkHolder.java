@@ -30,6 +30,12 @@ public class PlotChunkHolder extends ChunkHolder {
     private @Nullable BoundingBox3i boundingBox;
 
     /**
+     * 该区块的方块数据相对已同步给客户端的版本是否已过期。
+     * 方块变更时置位，由 {@code SubLevelTrackingSystem} 在 tick 中重新下发整个区块后清除。
+     */
+    private boolean networkDirty = false;
+
+    /**
      * Creates a new plot chunk holder with a level & chunk position.
      * Builds a bounding box for the chunk if non-empty.
      */
@@ -100,6 +106,9 @@ public class PlotChunkHolder extends ChunkHolder {
      */
     public void handleBlockChange(final int x, final int y, final int z, final BlockState oldState, final BlockState newState) {
         if (this.chunk.getLevel().isClientSide()) return;
+
+        // 方块内容变了，客户端手上这份区块数据就过期了
+        this.networkDirty = true;
         if (oldState.isAir() && !newState.isAir()) {
             // block placed, expand or create bounding box
             if (this.boundingBox == null) {
@@ -146,6 +155,20 @@ public class PlotChunkHolder extends ChunkHolder {
 
     public LevelChunk getChunk() {
         return this.chunk;
+    }
+
+    /**
+     * @return 是否需要把该区块重新同步给客户端（不清除标记）
+     */
+    public boolean isNetworkDirty() {
+        return this.networkDirty;
+    }
+
+    /**
+     * 清除“需要重新同步”标记，应当在真正把区块发给客户端之后调用。
+     */
+    public void clearNetworkDirty() {
+        this.networkDirty = false;
     }
 
     /**

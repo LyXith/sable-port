@@ -22,8 +22,10 @@ public abstract class EntityMixin  {
 
     @Shadow private Level level;
 
-    @Inject(method = "calculateViewVector", at = @At("RETURN"), cancellable = true)
-    public void sable$calculateViewVector(final float f, final float g, final CallbackInfoReturnable<Vec3> cir) {
+    // mc26.3: Entity#calculateViewVector is now static, so inject into the
+    // instance wrapper Entity#getViewVector(float) instead.
+    @Inject(method = "getViewVector", at = @At("RETURN"), cancellable = true)
+    public void sable$calculateViewVector(final float partialTicks, final CallbackInfoReturnable<Vec3> cir) {
         final Function<SubLevel, Pose3dc> provider;
 
         if (this.level instanceof final LevelPoseProviderExtension levelPoseProvider) {

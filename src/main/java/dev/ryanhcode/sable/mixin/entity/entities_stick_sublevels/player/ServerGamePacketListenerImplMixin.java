@@ -28,7 +28,8 @@ public class ServerGamePacketListenerImplMixin {
     /**
      * FIXME: Don't just disable this check to handle sub-level freezing
      */
-    @WrapOperation(method = "handleMovePlayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;isChangingDimension()Z"))
+    // mc26.3: the moved-too-quickly check moved into handlePlayerPositionChange.
+    @WrapOperation(method = "handlePlayerPositionChange", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;isChangingDimension()Z"))
     private boolean sable$disableMovedTooQuicklyCheck(final ServerPlayer instance, final Operation<Boolean> original) {
         if (Sable.HELPER.getTrackingSubLevel(instance) != null) {
             return true;

@@ -13,6 +13,7 @@ import org.joml.Vector3d;
 import org.joml.Vector3dc;
 
 import java.util.Collection;
+import java.util.UUID;
 
 /**
  * A rope made of points. Some may say.
@@ -23,6 +24,10 @@ public class RopePhysicsObject implements ArbitraryPhysicsObject {
     protected final double collisionRadius;
     protected boolean active;
     protected RopeHandle handle;
+
+    private final UUID uuid = UUID.randomUUID();
+    protected int color = 0xFFFFFFFF;
+    protected float width = 0.25F;
 
     protected Vector3dc startAttachmentLocation = null;
     protected ServerSubLevel startAttachmentSubLevel = null;
@@ -52,6 +57,27 @@ public class RopePhysicsObject implements ArbitraryPhysicsObject {
 
     public double getCollisionRadius() {
         return this.collisionRadius;
+    }
+
+    /**
+     * @return the stable id of this rope (used for client sync / removal)
+     */
+    public UUID getUUID() {
+        return this.uuid;
+    }
+
+    /**
+     * @return the packed ARGB color used by the client renderer
+     */
+    public int getColor() {
+        return this.color;
+    }
+
+    /**
+     * @return the line width used by the client renderer
+     */
+    public float getWidth() {
+        return this.width;
     }
 
     /**

@@ -20,7 +20,9 @@ public abstract class ServerEntityMixin {
 
     @Shadow @Final private Entity entity;
 
-    @Inject(method = "sendChanges", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerEntity$Synchronizer;sendToTrackingPlayersFiltered(Lnet/minecraft/network/protocol/Packet;Ljava/util/function/Predicate;)V"))
+    // mc26.3: the old Synchronizer#sendToTrackingPlayersFiltered call is gone;
+    // refreshing lastPassengers at the head of sendChanges has the same effect.
+    @Inject(method = "sendChanges", at = @At("HEAD"))
     private void sable$beforeSendChanges(final CallbackInfo ci) {
         final List<Entity> passengers = this.entity.getPassengers();
 

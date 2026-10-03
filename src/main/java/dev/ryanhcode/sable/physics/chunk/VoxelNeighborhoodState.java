@@ -4,6 +4,7 @@ import dev.ryanhcode.sable.api.block.BlockWithSubLevelCollisionCallback;
 import dev.ryanhcode.sable.util.LevelAccelerator;
 import it.unimi.dsi.fastutil.ints.Int2BooleanOpenHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ChunkPos;
@@ -75,7 +76,7 @@ public enum VoxelNeighborhoodState {
     }
 
     public static VoxelNeighborhoodState getState(final LevelAccelerator level, final BlockPos pos, @Nullable final LevelChunk chunk) {
-        final ChunkPos initialPos = new ChunkPos(pos.getX(),pos.getZ());
+        final ChunkPos initialPos = new ChunkPos(SectionPos.blockToSectionCoord(pos.getX()), SectionPos.blockToSectionCoord(pos.getZ()));
         final BlockState state = chunk != null ? level.getBlockState(chunk, pos) : level.getBlockState(pos);
 
         if (isLiquid(state) || BlockWithSubLevelCollisionCallback.hasCallback(state))
@@ -97,8 +98,8 @@ public enum VoxelNeighborhoodState {
             final BlockPos nPos = pos.relative(Direction.get(Direction.AxisDirection.NEGATIVE, axis));
             final BlockPos pPos = pos.relative(Direction.get(Direction.AxisDirection.POSITIVE, axis));
 
-            final BlockState nState = chunk != null && new ChunkPos(nPos.getX(),nPos.getZ()).equals(initialPos) ? level.getBlockState(chunk, nPos) : level.getBlockState(nPos);
-            final BlockState pState = chunk != null && new ChunkPos(pPos.getX(),pPos.getZ()).equals(initialPos) ? level.getBlockState(chunk, pPos) : level.getBlockState(pPos);
+            final BlockState nState = chunk != null && new ChunkPos(SectionPos.blockToSectionCoord(nPos.getX()), SectionPos.blockToSectionCoord(nPos.getZ())).equals(initialPos) ? level.getBlockState(chunk, nPos) : level.getBlockState(nPos);
+            final BlockState pState = chunk != null && new ChunkPos(SectionPos.blockToSectionCoord(pPos.getX()), SectionPos.blockToSectionCoord(pPos.getZ())).equals(initialPos) ? level.getBlockState(chunk, pPos) : level.getBlockState(pPos);
 
             final boolean negativeSolid = isSolid(level, nPos, nState) && isFullBlock(level, nPos, nState);
             final boolean positiveSolid = isSolid(level, pPos, pState) && isFullBlock(level, pPos, pState);

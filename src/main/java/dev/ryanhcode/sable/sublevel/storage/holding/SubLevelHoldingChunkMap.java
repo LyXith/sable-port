@@ -23,6 +23,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.objects.*;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
@@ -232,7 +233,14 @@ public class SubLevelHoldingChunkMap implements AutoCloseable {
             // We save all intersecting sub-levels in the chain to the first one's chunk
             final Vector3d currentPosition = subLevel.logicalPose().position();
             BlockPos pos = BlockPos.containing(currentPosition.x, currentPosition.y, currentPosition.z);
-            final ChunkPos moveToChunk = new ChunkPos(pos.getX(), pos.getZ());
+            // PORT-NOTE(mc26.1): ChunkPos(int,int) takes CHUNK coordinates, so the block
+            // position must be converted with SectionPos.blockToSectionCoord. Passing the
+            // raw block coords stored the holding chunk 16x too far away, so on reload the
+            // chunk that actually loads never found the sub-level ("重进后全部消失").
+            final ChunkPos moveToChunk = new ChunkPos(
+                    SectionPos.blockToSectionCoord(pos.getX()),
+                    SectionPos.blockToSectionCoord(pos.getZ())
+            );
 
             final Collection<ServerSubLevel> chain = SubLevelHelper.getLoadingDependencyChain(subLevel);
             moved.addAll(chain);

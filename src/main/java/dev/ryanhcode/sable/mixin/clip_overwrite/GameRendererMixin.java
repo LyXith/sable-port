@@ -5,20 +5,18 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import dev.ryanhcode.sable.mixinterface.clip_overwrite.LevelPoseProviderExtension;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GameRenderer;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 
 /**
  * Makes sub-levels raycast against their render poses while picking.
  */
-@Mixin(GameRenderer.class)
+// mc26.3: GameRenderer#pick(float) moved to Minecraft#pick(float).
+@Mixin(Minecraft.class)
 public class GameRendererMixin {
-    @Shadow @Final private Minecraft minecraft;
 
     @WrapMethod(method = "pick(F)V")
     private void sable$pickWithRenderPoses(final float partialTick, final Operation<Void> original) {
+        final Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null) {
             original.call(partialTick);
             return;

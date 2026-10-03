@@ -30,15 +30,16 @@ public class CameraMixin {
     @Unique
     private final Vector3d sable$endPos = new Vector3d();
 
-    @WrapOperation(method = "setup", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;setPosition(DDD)V"))
+    // mc26.3: Camera#setup was replaced by Camera#alignWithEntity(float).
+    @WrapOperation(method = "alignWithEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;setPosition(DDD)V"))
     private void sable$setPosition(final Camera instance,
                                    final double x,
                                    final double y,
                                    final double z,
                                    final Operation<Void> original,
-                                   @Local(argsOnly = true) final Entity entity,
                                    @Local(argsOnly = true) final float partialTicks) {
 
+        final Entity entity = instance.entity();
         final SubLevel trackingSubLevel = Sable.HELPER.getTrackingOrVehicleSubLevel(entity);
 
         if (trackingSubLevel instanceof final ClientSubLevel clientSubLevel) {

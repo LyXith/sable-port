@@ -16,6 +16,9 @@ public final class SableClientConfig {
     public static final ModConfigSpec.BooleanValue SUB_LEVEL_WATER_OCCLUSION;
     public static final ModConfigSpec.BooleanValue SUB_LEVEL_SKYLIGHT_SHADOWS;
     public static final ModConfigSpec.BooleanValue DEBUG_DRAW_LOADED_CHUNKS;
+    public static final ModConfigSpec.BooleanValue SUB_LEVEL_OCCLUSION_CULLING;
+    public static final ModConfigSpec.BooleanValue SUB_LEVEL_CULL_ENCLOSED_BLOCKS;
+    public static final ModConfigSpec.DoubleValue SUB_LEVEL_RENDER_DISTANCE;
     public static final ModConfigSpec.DoubleValue INTERPOLATION_DELAY;
     public static final ModConfigSpec.EnumValue<SubLevelRenderer.SelectedRenderer> SELECTED_RENDERER;
     public static final ModConfigSpec.DoubleValue ZOOM_SENSITIVITY;
@@ -36,6 +39,19 @@ public final class SableClientConfig {
         DEBUG_DRAW_LOADED_CHUNKS = builder
                 .comment("Whether to draw loaded chunks on the client in the chunk debug renderer")
                 .define("debug_draw_loaded_chunks", false);
+        SUB_LEVEL_OCCLUSION_CULLING = builder
+                .comment("Whether to cull sub-level sections that are hidden behind other sections",
+                        "Sections are traversed from the camera like vanilla's section occlusion graph;",
+                        "a section is only drawn if it is reachable through non-opaque section faces.")
+                .define("sub_level_occlusion_culling", true);
+        SUB_LEVEL_CULL_ENCLOSED_BLOCKS = builder
+                .comment("Whether to skip sub-level blocks that are completely enclosed by opaque neighbours",
+                        "(invisible from the outside, typically the interior of solid structures)")
+                .define("sub_level_cull_enclosed_blocks", true);
+        SUB_LEVEL_RENDER_DISTANCE = builder
+                .comment("Maximum render distance (in blocks) for sub-levels.",
+                        "Set to -1 to disable distance culling.")
+                .defineInRange("sub_level_render_distance", -1.0, -1.0, Double.MAX_VALUE);
         INTERPOLATION_DELAY = builder
                 .comment("The distance back in game-ticks that the snapshot interpolation should operate")
                 .defineInRange("sub_level_snapshot_interpolation_delay_ticks", 1.5, 0.0, 100.0);

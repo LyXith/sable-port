@@ -11,7 +11,7 @@
     "sources": "https://github.com/ryanhcode/sable-companion",
     "issues": "${issues}"
   },
-  "accessWidener": "sable.classTweaker",
+  "accessWidener": "sable.classtweaker",
   "license": "${license}",
   "icon": "icon.png",
   "environment": "*",

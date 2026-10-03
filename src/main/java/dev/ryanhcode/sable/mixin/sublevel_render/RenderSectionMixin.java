@@ -2,47 +2,28 @@ package dev.ryanhcode.sable.mixin.sublevel_render;
 
 import dev.ryanhcode.sable.mixinterface.sublevel_render.vanilla.RenderSectionExtension;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.Set;
 
 /**
  * Notifies sub-level render data when one of its sections is marked dirty.
+ *
+ * <p>mc26.3 port: the per-section {@code dirty}/{@code setDirty} state was
+ * moved out of {@code SectionRenderDispatcher.RenderSection} into
+ * {@code SectionUpdateTracker}, which only tracks the real view area. Plot
+ * sections are dirty-tracked by {@code VanillaChunkedSubLevelRenderData}
+ * itself, so this mixin only keeps the listener plumbing used by that class.
  */
 @Mixin(SectionRenderDispatcher.RenderSection.class)
 public class RenderSectionMixin implements RenderSectionExtension {
-
-    @Shadow
-    private boolean dirty;
 
     @Unique
     private Set<DirtyListener> sable$listeners;
     @Unique
     private boolean sable$listening = true;
-
-    @Inject(method = "setDirty", at = @At("HEAD"))
-    public void setDirty(final boolean playerChanged, final CallbackInfo ci) {
-        if (this.sable$listening && !this.dirty && this.sable$listeners != null) {
-            // mc26.1: Veil's render-thread executor replaced with the client executor.
-            Minecraft.getInstance().execute(() -> {
-                for (final DirtyListener listener : this.sable$listeners) {
-                    listener.markDirty((SectionRenderDispatcher.RenderSection) (Object) this);
-                }
-            });
-        }
-    }
-
-    // PORT-NOTE(mc26.1): the getDistToPlayerSqr() @Overwrite is gone — the
-    // method no longer exists; section build priority now flows through
-    // CompileTaskDynamicQueue. Far-away plot sections may compile at slightly
-    // wrong priority until this is re-implemented against the new queue.
 
     @Override
     public void sable$addDirtyListener(final DirtyListener listener) {

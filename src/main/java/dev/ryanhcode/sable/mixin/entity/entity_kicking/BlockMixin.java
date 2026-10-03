@@ -6,6 +6,7 @@ import dev.ryanhcode.sable.sublevel.SubLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.Vec3;
@@ -27,7 +28,7 @@ public abstract class BlockMixin {
 
     @Inject(method = "popResource(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/item/ItemStack;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/block/Block;popResource(Lnet/minecraft/world/level/Level;Ljava/util/function/Supplier;Lnet/minecraft/world/item/ItemStack;)V", shift = At.Shift.BEFORE), locals = LocalCapture.CAPTURE_FAILHARD, cancellable = true)
     private static void sable$popResourceFromFace(final Level level, final BlockPos blockPos, final ItemStack itemStack,
-                                                   final CallbackInfo ci, final double yOffset,
+                                                   final CallbackInfo ci, final double halfHeight, final RandomSource random,
                                                    final double x, final double y, final double z) {
         final SubLevel subLevel = Sable.HELPER.getContaining(level, blockPos);
 

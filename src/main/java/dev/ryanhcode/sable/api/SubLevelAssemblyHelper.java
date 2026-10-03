@@ -339,7 +339,12 @@ public class SubLevelAssemblyHelper {
                 firstBlock = block;
             }
             final BlockPos blockPos = transform.apply(block);
-            final ChunkPos chunk = new ChunkPos(blockPos.getX(), blockPos.getZ());
+            // ChunkPos needs chunk coordinates; passing block coordinates made plot
+            // chunks look out of bounds under 26.3's GenerationChunkHolder check.
+            final ChunkPos chunk = new ChunkPos(
+                    SectionPos.blockToSectionCoord(blockPos.getX()),
+                    SectionPos.blockToSectionCoord(blockPos.getZ())
+            );
 
             final Vector2i jomlChunkPos = new Vector2i(chunk.x, chunk.z);
             if (chunkBoundsMin == null) {

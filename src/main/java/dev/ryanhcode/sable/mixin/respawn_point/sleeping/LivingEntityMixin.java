@@ -25,12 +25,13 @@ public abstract class LivingEntityMixin extends Entity {
      * @reason Sleeping on sub-levels
      */
     @Overwrite
-    private void setPosToBed(final BlockPos blockPos) {
+    private boolean setPosToBed(final BlockPos blockPos) {
         final Vector3d coords = JOMLConversion.upFromBottomCenterOf(blockPos, 0.6875);
         this.setPos(JOMLConversion.toMojang(Sable.HELPER.projectOutOfSubLevel(this.level(), coords)));
+        return true;
     }
 
-    @Redirect(method = "method_18404", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;setPos(DDD)V"))
+    @Redirect(method = "stopSleeping", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;setPos(DDD)V"))
     private void sable$stopSleeping(final LivingEntity instance, final double x, final double y, final double z) {
         final double halfHeight = this.getBoundingBox().getYsize() / 2.0;
 

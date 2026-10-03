@@ -37,7 +37,7 @@ public abstract class AbstractArrowMixin extends Entity {
         super(entityType, level);
     }
 
-    @Redirect(method = "onHitBlock", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/projectile/AbstractArrow;setPos(Lnet/minecraft/world/phys/Vec3;)V"))
+    @Redirect(method = "onHitBlock", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/projectile/arrow/AbstractArrow;setPos(Lnet/minecraft/world/phys/Vec3;)V"))
     private void sable$setPos(final AbstractArrow arrow,
                               final Vec3 position,
                               @Local(argsOnly = true) final BlockHitResult blockHitResult,
@@ -61,7 +61,7 @@ public abstract class AbstractArrowMixin extends Entity {
         arrow.setPos(localPosition.subtract(diff.normalize().scale(0.05F)));
     }
 
-    @Redirect(method = "onHitBlock", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/projectile/AbstractArrow;setDeltaMovement(Lnet/minecraft/world/phys/Vec3;)V"))
+    @Redirect(method = "onHitBlock", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/projectile/arrow/AbstractArrow;setDeltaMovement(Lnet/minecraft/world/phys/Vec3;)V"))
     private void sable$setDeltaMovement(final AbstractArrow arrow,
                                         final Vec3 movement,
                                         @Share("difference") final LocalRef<Vec3> differenceRef) {

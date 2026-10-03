@@ -6,12 +6,17 @@ import dev.ryanhcode.sable.companion.math.JOMLConversion;
 import dev.ryanhcode.sable.mixinterface.sublevel_render.vanilla.RenderSectionExtension;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
 import dev.ryanhcode.sable.sublevel.render.SubLevelRenderData;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
 import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.PrioritizeChunkUpdates;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.chunk.CompiledSectionMesh;
 import net.minecraft.client.renderer.chunk.RenderRegionCache;
+import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
@@ -52,6 +57,10 @@ public class VanillaChunkedSubLevelRenderData implements SubLevelRenderData {
      * All dirty render sections this renderer stores
      */
     private final ObjectList<SectionRenderDispatcher.RenderSection> dirtyRenderSections = new ObjectArrayList<>();
+    /**
+     * Section nodes that were marked dirty because a player changed them
+     */
+    private final LongSet playerChangedSections = new LongOpenHashSet();
     /**
      * The grid of render sections
      */
@@ -146,7 +155,11 @@ public class VanillaChunkedSubLevelRenderData implements SubLevelRenderData {
                             ((RenderSectionExtension) newSection).sable$addDirtyListener(this.dirtyRenderSections::add);
                         }
 
-                        if (newSection.isDirty()) {
+                        // mc26.3 port: RenderSection no longer carries its own
+                        // dirty state (that moved to SectionUpdateTracker in
+                        // vanilla). Newly created plot sections are uncompiled
+                        // and therefore need a build.
+                        if (newSection.getSectionMesh() == CompiledSectionMesh.UNCOMPILED) {
                             this.dirtyRenderSections.add(newSection);
                         }
                         this.renderSections[this.getIndex(x, y, z)] = newSection;
@@ -174,7 +187,22 @@ public class VanillaChunkedSubLevelRenderData implements SubLevelRenderData {
     @Override
     public void rebuild() {
         for (final SectionRenderDispatcher.RenderSection renderSection : this.allRenderSections) {
-            renderSection.setDirty(true);
+            this.sable$markDirty(renderSection, true);
+        }
+    }
+
+    /**
+     * Marks a plot render section as needing a rebuild.
+     *
+     * <p>Vanilla's {@code SectionUpdateTracker} only covers the real view area,
+     * so plot sections keep their own dirty queue here.
+     */
+    private void sable$markDirty(final SectionRenderDispatcher.RenderSection renderSection, final boolean playerChanged) {
+        if (playerChanged) {
+            this.playerChangedSections.add(renderSection.getSectionNode());
+        }
+        if (!this.dirtyRenderSections.contains(renderSection)) {
+            this.dirtyRenderSections.add(renderSection);
         }
     }
 
@@ -188,31 +216,43 @@ public class VanillaChunkedSubLevelRenderData implements SubLevelRenderData {
         final Vector3d cameraPos = JOMLConversion.atCenterOf(camera.blockPosition()).sub(8, 8, 8);
         this.subLevel.logicalPose().transformPositionInverse(cameraPos);
 
+        final ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) {
+            this.dirtyRenderSections.clear();
+            this.playerChangedSections.clear();
+            return;
+        }
+
         for (final SectionRenderDispatcher.RenderSection renderSection : this.dirtyRenderSections) {
             ((RenderSectionExtension) renderSection).sable$setListening(false);
 
+            final boolean playerChanged = this.playerChangedSections.contains(renderSection.getSectionNode());
             boolean buildSync = false;
             if (chunkUpdates == PrioritizeChunkUpdates.NEARBY) {
                 final BlockPos origin = renderSection.getRenderOrigin();
-                buildSync = cameraPos.distanceSquared(origin.getX(), origin.getY(), origin.getZ()) < 768.0 || renderSection.isDirtyFromPlayer();
+                buildSync = cameraPos.distanceSquared(origin.getX(), origin.getY(), origin.getZ()) < 768.0 || playerChanged;
             } else if (chunkUpdates == PrioritizeChunkUpdates.PLAYER_AFFECTED) {
-                buildSync = renderSection.isDirtyFromPlayer();
+                buildSync = playerChanged;
             }
 
+            // mc26.3 port: RenderSection#rebuildSectionSync/Async and the
+            // dispatcher overloads were replaced by the region based
+            // compileSync/compileAsync calls (mirrors LevelRenderer#compileSections).
+            final RenderSectionRegion region = renderRegionCache.createRegion(level, renderSection.getSectionNode());
             if (buildSync) {
                 profiler.push("sublevel_build_near_sync");
-                this.sectionRenderDispatcher.rebuildSectionSync(renderSection, renderRegionCache);
+                renderSection.compileSync(region);
                 profiler.pop();
             } else {
                 profiler.push("sublevel_schedule_async_compile");
-                renderSection.rebuildSectionAsync(renderRegionCache);
+                renderSection.compileAsync(region);
                 profiler.pop();
             }
 
-            renderSection.setNotDirty();
             ((RenderSectionExtension) renderSection).sable$setListening(true);
         }
         this.dirtyRenderSections.clear();
+        this.playerChangedSections.clear();
     }
 
     @Override
@@ -251,7 +291,7 @@ public class VanillaChunkedSubLevelRenderData implements SubLevelRenderData {
 
         final int index = this.getIndex(x, y, z);
         if (index >= 0 && index < this.renderSections.length) {
-            this.renderSections[index].setDirty(playerChanged);
+            this.sable$markDirty(this.renderSections[index], playerChanged);
         }
     }
 

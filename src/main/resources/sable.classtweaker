@@ -1,7 +1,9 @@
 classTweaker v2 official
 
 accessible field net/minecraft/client/renderer/chunk/ChunkSectionsToRender maxIndicesRequired I
+accessible field net/minecraft/client/renderer/chunk/ChunkSectionsToRender terrainTransformUBO Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;
 accessible field net/minecraft/client/renderer/chunk/ChunkSectionsToRender$DrawSeparate drawsPerLayer Ljava/util/Map;
+accessible field net/minecraft/client/renderer/chunk/ChunkSectionsToRender$DrawSeparate chunkSectionInfos [Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;
 accessible class net/minecraft/client/multiplayer/ClientChunkCache$Storage
 
 accessible field net/minecraft/server/level/ChunkHolder fullChunkFuture Ljava/util/concurrent/CompletableFuture;
@@ -23,7 +25,6 @@ accessible field net/minecraft/world/level/ClipContext collisionContext Lnet/min
 
 accessible method net/minecraft/server/level/ChunkMap onFullChunkStatusChange (Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/server/level/FullChunkStatus;)V
 accessible field net/minecraft/world/level/ChunkPos x I
-accessible field net/minecraft/world/level/ChunkPos y I
 accessible field net/minecraft/world/level/ChunkPos z I
 
 accessible field net/minecraft/client/particle/Particle xo D
@@ -42,15 +43,8 @@ extendable method net/minecraft/server/level/GenerationChunkHolder rescheduleChu
 
 accessible method net/minecraft/server/level/ThreadedLevelLightEngine updateChunkStatus (Lnet/minecraft/world/level/ChunkPos;)V
 
-accessible field net/minecraft/client/renderer/block/BlockRenderDispatcher modelRenderer Lnet/minecraft/client/renderer/block/ModelBlockRenderer;
-accessible field net/minecraft/client/renderer/RenderStateShard name Ljava/lang/String;
-
 # Assembly
 accessible method net/minecraft/world/entity/decoration/HangingEntity calculateSupportBox ()Lnet/minecraft/world/phys/AABB;
-
-# Directional Shading
-accessible field net/minecraft/client/renderer/block/ModelBlockRenderer CACHE Ljava/lang/ThreadLocal;
-accessible class net/minecraft/client/renderer/block/ModelBlockRenderer$Cache
 
 # UDP Networking
 accessible field net/minecraft/network/Connection channel Lio/netty/channel/Channel;
@@ -100,7 +94,4 @@ accessible field net/minecraft/world/entity/Entity removalReason Lnet/minecraft/
 
 extendable method net/minecraft/world/entity/Entity getEyePosition (F)Lnet/minecraft/world/phys/Vec3;
 extendable method net/minecraft/world/entity/Entity setRemoved (Lnet/minecraft/world/entity/Entity$RemovalReason;)V
-
-#Abstract hurting projectile accel
-accessible field net/minecraft/world/entity/projectile/AbstractHurtingProjectile accelerationPower D
 

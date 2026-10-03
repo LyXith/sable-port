@@ -34,8 +34,9 @@ public class GameRendererMixin {
     @Unique
     private UUID sable$lastSubLevel = null;
 
+    // mc26.3: GameRenderer#renderLevel no longer takes a DeltaTracker.
     @Inject(method = "renderLevel", at = @At("HEAD"))
-    public void renderLevel(final DeltaTracker deltaTracker, final CallbackInfo ci) {
+    public void renderLevel(final CallbackInfo ci) {
         final LocalPlayer player = this.minecraft.player;
         final SubLevel standingSubLevel = Sable.HELPER.getTrackingSubLevel(player);
 

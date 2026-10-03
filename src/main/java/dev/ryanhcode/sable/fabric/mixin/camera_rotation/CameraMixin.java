@@ -8,6 +8,7 @@ import net.minecraft.world.entity.Entity;
 import org.joml.Quaterniond;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
+import org.joml.Vector3fc;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -25,15 +26,15 @@ public abstract class CameraMixin {
 
     @Shadow
     @Final
-    private static Vector3f FORWARDS;
+    private static Vector3fc FORWARDS;
 
     @Shadow
     @Final
-    private static Vector3f UP;
+    private static Vector3fc UP;
 
     @Shadow
     @Final
-    private static Vector3f LEFT;
+    private static Vector3fc LEFT;
 
     @Shadow
     @Final
@@ -57,7 +58,9 @@ public abstract class CameraMixin {
 
     @Shadow @Deprecated protected abstract void setRotation(float f, float g);
 
-    @Redirect(method = "setup", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;setRotation(FF)V", ordinal = 2))
+    // mc26.3: Camera#setup was replaced by Camera#alignWithEntity(float); the
+    // third setRotation call (mirrored detached camera) keeps ordinal 2.
+    @Redirect(method = "alignWithEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;setRotation(FF)V", ordinal = 2))
     private void sable$redirectSetRotation(final Camera camera, final float f, final float g) {
         this.setRotation(this.entity.getViewYRot(f) + 180.0f, -this.entity.getViewXRot(f));
     }

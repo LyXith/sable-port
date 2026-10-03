@@ -17,6 +17,7 @@ import dev.ryanhcode.sable.sublevel.plot.LevelPlot;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.commands.ExecuteCommand;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -48,7 +49,7 @@ public class ExecuteCommandMixin {
                                                 final Pose3d pose = subLevel.logicalPose();
                                                 final Vec3 localPos = pose.transformPositionInverse(commandContext.getSource().getPosition());
                                                 BlockPos blockpos = BlockPos.containing(localPos);
-                                                if (container.getPlot(new ChunkPos(blockpos.getX(), blockpos.getZ())) != subLevel.getPlot()) {
+                                                if (container.getPlot(new ChunkPos(SectionPos.blockToSectionCoord(blockpos.getX()), SectionPos.blockToSectionCoord(blockpos.getZ()))) != subLevel.getPlot()) {
                                                     throw SableCommandHelper.ERROR_NOT_INSIDE_SUB_LEVEL.create();
                                                 }
 
@@ -69,7 +70,7 @@ public class ExecuteCommandMixin {
                                                 final Vec3 sourcePosition = commandContext.getSource().getPosition();
                                                 final Vec3 globalPos = pose.transformPosition(sourcePosition);
                                                 BlockPos blockpos = BlockPos.containing(sourcePosition);
-                                                if (container.getPlot(new ChunkPos(blockpos.getX(), blockpos.getZ())) != subLevel.getPlot()) {
+                                                if (container.getPlot(new ChunkPos(SectionPos.blockToSectionCoord(blockpos.getX()), SectionPos.blockToSectionCoord(blockpos.getZ()))) != subLevel.getPlot()) {
                                                     throw SableCommandHelper.ERROR_NOT_INSIDE_SUB_LEVEL.create();
                                                 }
 

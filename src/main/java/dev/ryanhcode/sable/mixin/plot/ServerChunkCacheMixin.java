@@ -4,6 +4,7 @@ import com.mojang.datafixers.DataFixer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.sublevel.plot.PlotChunkHolder;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.*;
 import net.minecraft.world.level.ChunkPos;
@@ -143,7 +144,11 @@ public class ServerChunkCacheMixin {
     private void blockChanged(final BlockPos blockPos, final CallbackInfo ci) {
         final SubLevelContainer container = this.sable$getPlotContainer();
 
-        final ChunkPos pos = new ChunkPos(blockPos.getX(), blockPos.getZ());
+        // blockPos is a BLOCK position; ChunkPos needs chunk coordinates.
+        final ChunkPos pos = new ChunkPos(
+                SectionPos.blockToSectionCoord(blockPos.getX()),
+                SectionPos.blockToSectionCoord(blockPos.getZ())
+        );
         if (container.inBounds(pos)) {
             final PlotChunkHolder holder = container.getChunkHolder(pos);
 

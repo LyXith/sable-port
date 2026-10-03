@@ -48,7 +48,13 @@ public class SableCommonEvents {
 
             plotChunk.handleBlockChange(localX, y, localZ, oldState, newState);
             plot.updateBoundingBox();
-            plot.expandIfNecessary(blockPos);
+            // Only grow the plot when a block is placed. Removing blocks (for
+            // example when a sub-level is cleared/removed) must not expand the
+            // plot, otherwise the removal pass tries to create chunks at the
+            // plot's far-away coordinates and blows past the chunk bounds.
+            if (!newState.isAir()) {
+                plot.expandIfNecessary(blockPos);
+            }
 
             final SubLevel subLevel = plot.getSubLevel();
 

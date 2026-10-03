@@ -18,6 +18,7 @@ import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PositionMoveRotation;
+import net.minecraft.world.entity.PositionPath;
 import net.minecraft.world.entity.Relative;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -58,17 +59,18 @@ public abstract class ClientPacketListenerMixin {
                 () -> original.call(change, relatives, entity, interpolate));
     }
 
-    @WrapOperation(method = "handleMoveEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;moveOrInterpolateTo(Lnet/minecraft/world/phys/Vec3;FF)V"))
+    @WrapOperation(method = "handleMoveEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;moveOrInterpolateTo(Lnet/minecraft/world/entity/PositionPath;FF)V"))
     private void sable$handleMoveEntity(final Entity instance,
-                                        final Vec3 target,
+                                        final PositionPath path,
                                         final float yRot,
                                         final float xRot,
                                         final Operation<Void> original,
                                         @Local(argsOnly = true) final ClientboundMoveEntityPacket packet) {
         final boolean actuallyInSubLevel = (Object) packet instanceof final PacketActuallyInSubLevelExtension extension && extension.sable$isActuallyInSubLevel();
+        final Vec3 target = path.endPosition();
 
         this.sable$lerp(instance, target, yRot, xRot, SABLE$DEFAULT_LERP_STEPS, false, actuallyInSubLevel, () -> {
-            original.call(instance, target, yRot, xRot);
+            original.call(instance, path, yRot, xRot);
             return false;
         });
     }
@@ -77,14 +79,17 @@ public abstract class ClientPacketListenerMixin {
     // ServerEntity uses it when an entity's on-ground state changes, so it is
     // commonly the first movement packet sent after a mob steps onto a
     // sub-level.
-    @WrapOperation(method = "handleEntityPositionSync", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;moveOrInterpolateTo(Lnet/minecraft/world/phys/Vec3;FF)V"))
+    @WrapOperation(method = "handleEntityPositionSync", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;moveOrInterpolateTo(Lnet/minecraft/world/entity/PositionPath;FF)V"))
     private void sable$handleEntityPositionSyncInterpolation(final Entity instance,
-                                                             final Vec3 target,
+                                                             final PositionPath path,
                                                              final float yRot,
                                                              final float xRot,
                                                              final Operation<Void> original,
                                                              @Local(argsOnly = true) final ClientboundEntityPositionSyncPacket packet) {
-        this.sable$handleEntityPositionSync(instance, target, yRot, xRot, original, packet);
+        this.sable$handleEntityPositionSync(instance, path.endPosition(), yRot, xRot, () -> {
+            original.call(instance, path, yRot, xRot);
+            return false;
+        }, packet);
     }
 
     @WrapOperation(method = "handleEntityPositionSync", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;snapTo(Lnet/minecraft/world/phys/Vec3;FF)V"))
@@ -94,7 +99,10 @@ public abstract class ClientPacketListenerMixin {
                                                     final float xRot,
                                                     final Operation<Void> original,
                                                     @Local(argsOnly = true) final ClientboundEntityPositionSyncPacket packet) {
-        this.sable$handleEntityPositionSync(instance, target, yRot, xRot, original, packet);
+        this.sable$handleEntityPositionSync(instance, target, yRot, xRot, () -> {
+            original.call(instance, target, yRot, xRot);
+            return false;
+        }, packet);
     }
 
     @Unique
@@ -102,16 +110,13 @@ public abstract class ClientPacketListenerMixin {
                                                 final Vec3 target,
                                                 final float yRot,
                                                 final float xRot,
-                                                final Operation<Void> original,
+                                                final BooleanSupplier vanillaCall,
                                                 final ClientboundEntityPositionSyncPacket packet) {
         final boolean actuallyInSubLevel =
                 (Object) packet instanceof final PacketActuallyInSubLevelExtension extension
                         && extension.sable$isActuallyInSubLevel();
 
-        this.sable$lerp(entity, target, yRot, xRot, SABLE$DEFAULT_LERP_STEPS, true, actuallyInSubLevel, () -> {
-            original.call(entity, target, yRot, xRot);
-            return false;
-        });
+        this.sable$lerp(entity, target, yRot, xRot, SABLE$DEFAULT_LERP_STEPS, true, actuallyInSubLevel, vanillaCall);
     }
 
     /**

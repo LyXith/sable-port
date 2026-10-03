@@ -18,7 +18,7 @@ public abstract class ThrownTridentMixin extends Entity {
         super(entityType, level);
     }
 
-    @Inject(method = "tick", at= @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/projectile/ThrownTrident;setNoPhysics(Z)V"))
+    @Inject(method = "tick", at= @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/projectile/arrow/ThrownTrident;setNoPhysics(Z)V"))
     private void sable$startReturning(final CallbackInfo ci) {
         final SubLevel subLevel = Sable.HELPER.getContaining(this);
 

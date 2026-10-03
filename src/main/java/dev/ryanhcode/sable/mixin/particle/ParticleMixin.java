@@ -109,7 +109,9 @@ public abstract class ParticleMixin implements ParticleExtension {
     public abstract void tick();
 
     //#region stupid vanilla velocity
-    @ModifyConstant(method = "Lnet/minecraft/client/particle/Particle;<init>(Lnet/minecraft/client/multiplayer/ClientLevel;DDDDDD)V", constant = @Constant(ordinal = 13))
+    // mc26.3: the +0.1F upward bias is widened to a double in bytecode, so match
+    // the widened value directly instead of a fragile ordinal.
+    @ModifyConstant(method = "Lnet/minecraft/client/particle/Particle;<init>(Lnet/minecraft/client/multiplayer/ClientLevel;DDDDDD)V", constant = @Constant(doubleValue = 0.1F))
     private double sable$removeUpwardsVelocity(final double originalBlockDamageDistanceConstant) {
         return 0.0;
     }
@@ -467,7 +469,8 @@ public abstract class ParticleMixin implements ParticleExtension {
         }
     }
 
-    @Inject(method = "getLightColor", at = @At("HEAD"), cancellable = true)
+    // mc26.3: Particle#getLightColor was renamed to getLightCoords.
+    @Inject(method = "getLightCoords", at = @At("HEAD"), cancellable = true)
     private void sable$checkSubLevelLightColor(final float f, final CallbackInfoReturnable<Integer> cir) {
         final double particleX = this.x;
         final double particleY = this.y;

@@ -7,6 +7,7 @@ import dev.ryanhcode.sable.api.physics.PhysicsPipeline;
 import dev.ryanhcode.sable.api.physics.handle.RigidBodyHandle;
 import dev.ryanhcode.sable.api.physics.mass.MassTracker;
 import dev.ryanhcode.sable.api.physics.object.ArbitraryPhysicsObject;
+import dev.ryanhcode.sable.api.physics.object.rope.RopePhysicsObject;
 import dev.ryanhcode.sable.api.sublevel.ServerSubLevelContainer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelObserver;
@@ -26,6 +27,8 @@ import dev.ryanhcode.sable.sublevel.plot.PlotChunkHolder;
 import dev.ryanhcode.sable.sublevel.plot.ServerLevelPlot;
 import dev.ryanhcode.sable.sublevel.storage.SubLevelRemovalReason;
 import dev.ryanhcode.sable.sublevel.system.ticket.PhysicsChunkTicketManager;
+import dev.ryanhcode.sable.network.packets.tcp.ClientboundRopeSyncPacket;
+import dev.ryanhcode.sable.network.tcp.SablePacketSink;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
@@ -37,6 +40,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -48,7 +52,9 @@ import org.joml.Math;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -234,6 +240,43 @@ public class SubLevelPhysicsSystem implements SubLevelObserver {
             }
 
             SubLevelPhysicsSystem.currentlySteppingSystem = null;
+        }
+
+        this.syncRopesToClients();
+    }
+
+    /**
+     * 将所有绳子（{@link RopePhysicsObject}）的点集全量同步给客户端用于渲染。
+     */
+    private void syncRopesToClients() {
+        if (this.arbitraryObjects.isEmpty() || this.level.players().isEmpty()) {
+            return;
+        }
+
+        List<ClientboundRopeSyncPacket.Entry> entries = null;
+        for (final ArbitraryPhysicsObject object : this.arbitraryObjects) {
+            if (!(object instanceof final RopePhysicsObject rope)) {
+                continue;
+            }
+
+            if (entries == null) {
+                entries = new ArrayList<>();
+            }
+
+            final List<Vec3> points = new ArrayList<>(rope.getPoints().size());
+            for (final Vector3d point : rope.getPoints()) {
+                points.add(new Vec3(point.x, point.y, point.z));
+            }
+            entries.add(new ClientboundRopeSyncPacket.Entry(rope.getUUID(), points, rope.getColor(), rope.getWidth()));
+        }
+
+        if (entries == null) {
+            return;
+        }
+
+        final ClientboundRopeSyncPacket packet = new ClientboundRopeSyncPacket(entries);
+        for (final ServerPlayer player : this.level.players()) {
+            SablePacketSink.player(player).sendPacket(packet);
         }
     }
 

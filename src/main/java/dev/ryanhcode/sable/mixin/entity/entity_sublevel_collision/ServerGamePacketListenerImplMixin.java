@@ -2,6 +2,7 @@ package dev.ryanhcode.sable.mixin.entity.entity_sublevel_collision;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -13,7 +14,9 @@ public class ServerGamePacketListenerImplMixin {
     @Shadow public ServerPlayer player;
 
     // TODO: make this check if they're standing on a sub-level instead of disabling the check
-    @Redirect(method = "handleMovePlayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;isCreative()Z"))
+    // mc26.3: the movement validation moved out of handleMovePlayer into
+    // handlePlayerPositionChange, where the isCreative() call site now lives.
+    @Redirect(method = "handlePlayerPositionChange", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;isCreative()Z"))
     private boolean sable$ignoreCreativeModeForSubLevelCollision(final ServerPlayer instance) {
         return true;
     }
