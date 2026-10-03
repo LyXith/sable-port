@@ -73,7 +73,7 @@ sourceSets {
             // EntityRenderer moved to render-state generics in 26.3
             // (shouldRender(T, Frustum, ..., float), getBoundingBoxForCulling(T, float),
             // affectedByCulling(T)); this mixin is built around the old Entity signatures.
-            exclude 'dev/ryanhcode/sable/mixin/entity/entity_rendering/EntityRendererMixin.java'
+            // exclude 'dev/ryanhcode/sable/mixin/entity/entity_rendering/EntityRendererMixin.java'
         }
     }
 }

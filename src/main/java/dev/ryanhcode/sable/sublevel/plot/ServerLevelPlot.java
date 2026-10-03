@@ -301,15 +301,10 @@ public class ServerLevelPlot extends LevelPlot {
                 for (final Entity entity : entities) {
                     if (entity.is(SableTags.DESTROY_WITH_SUB_LEVEL)) {
                         entity.remove(Entity.RemovalReason.KILLED);
+                        section.remove(entity);
                     } else {
                         EntitySubLevelUtil.kickEntity(subLevel, entity);
-                        final ServerLevel level = subLevel.getLevel();
-
-                        entity.levelCallback.onRemove(Entity.RemovalReason.CHANGED_DIMENSION);
-                        level.addDuringTeleport(entity);
                     }
-
-                    section.remove(entity);
                 }
             }
         }

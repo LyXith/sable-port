@@ -49,12 +49,21 @@ public abstract class AbstractArrowMixin extends Entity {
             return;
         }
 
-        final Vec3 localPosition = subLevel.logicalPose().transformPositionInverse(this.position());
-        final Vec3 diff = blockHitResult.getLocation().subtract(localPosition);
+        // In 26.3 AbstractArrow.stepMoveAndHit() does setPos(hitResult.getLocation()) BEFORE
+        // calling onHitBlock(), and onHitBlock is only reached when there is no entity hit, so
+        // this.position() is already the (sub-level local) block hit point here. Transforming it
+        // with transformPositionInverse() would add the rotation point a second time (~2e7) and
+        // turn a tiny arrow impulse into a huge torque that launches the sub-level.
+        final Vec3 localPosition = this.position();
+
+        // The arrow's delta movement is still its global flight velocity, so it does need the
+        // normal -> local transform. In 26.3 the arrow has already been moved onto the hit point,
+        // so hit - position is zero; use the (local) flight direction instead so the stuck arrow
+        // keeps its orientation and the impulse points the right way.
+        final Vec3 diff = subLevel.logicalPose().transformNormalInverse(this.getDeltaMovement());
 
         if (!this.level().isClientSide() && !this.isInGround()) {
-            final Vec3 localImpulse = subLevel.logicalPose().transformNormalInverse(this.getDeltaMovement());
-            RigidBodyHandle.of((ServerSubLevel) subLevel).applyImpulseAtPoint(localPosition, localImpulse);
+            RigidBodyHandle.of((ServerSubLevel) subLevel).applyImpulseAtPoint(localPosition, diff);
         }
 
         differenceRef.set(diff);
