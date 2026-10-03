@@ -38,9 +38,7 @@ import org.joml.Matrix4fc;
 import org.joml.Vector3dc;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -55,16 +53,11 @@ import java.util.List;
 @Mixin(value = LevelRenderer.class, priority = 1002)
 public abstract class LevelRendererMixin {
 
-    @Shadow
-    private @Nullable ClientLevel level;
-
-    @Shadow
-    @Final
-    private Minecraft minecraft;
 
     @Inject(method = "compileSections", at = @At("TAIL"))
     private void sable$compileSections(CameraRenderState camera, CallbackInfo ci) {
-        final Iterable<ClientSubLevel> sublevels = ((ClientSubLevelContainer) ((SubLevelContainerHolder) this.level).sable$getPlotContainer()).getAllSubLevels();
+        ClientLevel level = Minecraft.getInstance().level;
+        final Iterable<ClientSubLevel> sublevels = ((ClientSubLevelContainer) ((SubLevelContainerHolder) level).sable$getPlotContainer()).getAllSubLevels();
         final RenderRegionCache renderRegionCache = new RenderRegionCache();
         final PrioritizeChunkUpdates chunkUpdates = Minecraft.getInstance().options.prioritizeChunkUpdates().get();
 
@@ -81,8 +74,8 @@ public abstract class LevelRendererMixin {
 
         final ProfilerFiller profiler = net.minecraft.util.profiling.Profiler.get();
         profiler.push("sub_level_section_occlusion_graph");
-
-        final Iterable<ClientSubLevel> sublevels = ((ClientSubLevelContainer) ((SubLevelContainerHolder) this.level).sable$getPlotContainer()).getAllSubLevels();
+        ClientLevel level = Minecraft.getInstance().level;
+        final Iterable<ClientSubLevel> sublevels = ((ClientSubLevelContainer) ((SubLevelContainerHolder) level).sable$getPlotContainer()).getAllSubLevels();
         final Vec3 cameraPosition = camera.position();
         dispatcher.updateCulling(sublevels, cameraPosition.x, cameraPosition.y, cameraPosition.z, frustum, spectator);
 
@@ -96,12 +89,12 @@ public abstract class LevelRendererMixin {
         if (SableLoaderPlatform.INSTANCE.isModLoaded("sodium")) {
             return;
         }
-
-        if (this.level == null) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) {
             return;
         }
 
-        final ClientSubLevelContainer container = SubLevelContainer.getContainer(this.level);
+        final ClientSubLevelContainer container = SubLevelContainer.getContainer(level);
         if (container == null) {
             return;
         }
@@ -117,7 +110,7 @@ public abstract class LevelRendererMixin {
         final List<DynamicUniforms.Transform> transforms = new ArrayList<>();
         final Vector4f white = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
         final Matrix4f textureMatrix = new Matrix4f();
-        int maxIndicesRequired = original.maxIndicesRequired();
+        int maxIndicesRequired = original.maxIndicesRequired;
 
         for (final ClientSubLevel subLevel : container.getAllSubLevels()) {
             if (!(subLevel.getRenderData() instanceof final VanillaChunkedSubLevelRenderData renderData)) {
@@ -183,16 +176,17 @@ public abstract class LevelRendererMixin {
         cir.setReturnValue(new ChunkSectionsToRender(drawsPerLayer, maxIndicesRequired, combinedTransforms));
     }
 
-    @Inject(method = "isSectionCompiled", at = @At("HEAD"), cancellable = true)
-    private void sable$isSectionCompiled(final BlockPos blockPos, final CallbackInfoReturnable<Boolean> cir) {
-        final ClientSubLevelContainer container = SubLevelContainer.getContainer(this.level);
+    @Inject(method = "isSectionCompiledAndVisible", at = @At("HEAD"), cancellable = true)
+    private void sable$isSectionCompiled(BlockPos blockPos, long chunkFadeDuration, CallbackInfoReturnable<Boolean> cir) {
+        ClientLevel level = Minecraft.getInstance().level;
+        final ClientSubLevelContainer container = SubLevelContainer.getContainer(level);
 
         if (container == null) {
             return;
         }
 
         if (container.inBounds(blockPos)) {
-            final ClientSubLevel subLevel = (ClientSubLevel) Sable.HELPER.getContaining(this.level, blockPos);
+            final ClientSubLevel subLevel = (ClientSubLevel) Sable.HELPER.getContaining(level, blockPos);
 
             if (subLevel == null) {
                 cir.setReturnValue(false);

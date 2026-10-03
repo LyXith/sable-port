@@ -145,7 +145,7 @@ public abstract class SodiumWorldRendererMixin {
         // LevelRenderer normally selects the world-lighting UBO. The immediate
         // block model pipeline consumes that UBO for directional face shading,
         // so bind it here as well instead of inheriting stale GUI/item lights.
-        minecraft.gameRenderer.getLighting().setupFor(Lighting.Entry.LEVEL);
+        minecraft.gameRenderer.lighting().setupFor(Lighting.Entry.LEVEL);
 
         for (final ClientSubLevel subLevel : container.getAllSubLevels()) {
             final SubLevelLightVertexConsumerProvider blockBuffers = new SubLevelLightVertexConsumerProvider(
