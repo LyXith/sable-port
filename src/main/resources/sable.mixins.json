@@ -54,6 +54,7 @@
     "sublevel_render.RenderSectionMixin",
     "sublevel_render.block_entity_render.LevelExtractorMixin",
     "sublevel_render.block_entity_render.LevelRendererMixin",
+    "sublevel_render.impl.vanilla.ChunkSectionsToRenderMixin",
     "sublevel_render.impl.vanilla.LevelRendererMixin",
     "sublevel_render.impl.vanilla.ViewAreaMixin",
     "sublevel_sounds.AbstractSoundInstanceMixin",

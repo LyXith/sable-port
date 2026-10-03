@@ -56,7 +56,10 @@
 
 ### 渲染
 
-- **子关卡方块渲染**改为通过 `SubmitNodeCollector.submitMovingBlock`（原版活塞路径）提交，支持完整位姿 / 旋转 / 非整数位置。
+- **按 section 批量绘制子关卡**（`sub_level_batched_sections`，本次性能优化的主体）：26.3 没有 1.21 那套 per-section 变换矩阵，`ChunkSectionInfo` 只存 section 原点与可见度，所以不能直接沿用旧的「地形管线带子关卡位姿」思路。做法改为给每个子关卡构造一个自带 `TerrainUniform` UBO 的 `ChunkSectionsToRender.DrawSeparate`，并在 `ChunkSectionInfo` 里把 section 原点整体偏移一个整数向量 `B = round(position − rotationPoint)`；UBO 里的矩阵取 `viewRotation · T(position − camera) · R · S · T(camera − rotationPoint − B)`，代入 shader 的 `pos = p − camera` 后正好还原逐方块路径的变换。绘制挂在原版 `renderGroup` / `renderOit` 的 `TAIL`（`ChunkSectionsToRenderMixin`），实心 / 经典半透明 / OIT 三条路径都能自动拾取。原先 140k 方块岛屿每帧要逐方块 `submitMovingBlock`，现在每个子关卡只提交一次。
+- **mesh 未编译时的回退**：`isSectionBatchable(...)` 同时被提交阶段与批量构建阶段调用，mesh 就绪就批量绘制，否则退回 `SubmitNodeCollector.submitMovingBlock` 逐方块提交，避免加载时方块缺失或被重复画两次。
+- **半透明排序**：plot section 的 `SectionPos` 是子关卡自己的网格坐标，直接拿世界相机算排序键会排错，因此 `RenderSectionMixin` 拦截 `createVertexSorting`，先用位姿逆变换把相机映射进 plot 空间。编译与重排都经此入口，无需共享 dispatcher 的相机位置（避免渲染线程 / worker 线程竞态）。
+- **子关卡方块渲染**（回退路径）通过 `SubmitNodeCollector.submitMovingBlock`（原版活塞路径）提交，支持完整位姿 / 旋转 / 非整数位置。
 - **面剔除**：vanilla `MovingBlockFeatureRenderer` 把 `cull` 硬编码为 `false`，且 Fabric `fabric-renderer-api-v1` 会把 moving-block 渲染交给 Indigo。因此通过 `AltModelBlockRendererImplMixin` 强制 Indigo 的 moving-block 渲染 `cull = true`，并用 `SubLevelMovingBlockRenderState` 读取真实 plot 邻居。
 - **剔除**：`impl.vanilla.LevelRendererMixin` 每帧读取 `SableClientConfig`，实现 section 遮挡 BFS、距离剔除、封闭方块剔除与视锥剔除。
 - **破坏裂纹**（`block_decal_render`）：
@@ -77,6 +80,8 @@
 ## 5. 已知限制
 
 - **无 Sodium 兼容层**：安装 Sodium 时子关卡渲染不会走 Sodium 路径（Sodium 仍可用于原版地形）。
+- **子关卡旋转时雾效略有偏差**：批量路径把 `pos` 组织成「未旋转位置 + 整数偏移 B」，雾按这个 `pos` 算距离。恒等位姿下完全准确；子关卡被旋转或缩放时，雾距离与真实渲染位置相差 `(I − R·S)·(p − rotationPoint)`，也就是离旋转中心越远误差越大（未旋转时为 0）。
+- **半透明排序刷新为 500 ms 一次**（原版每帧）：快速绕着子关卡走时，水面 / 玻璃的排序最多滞后半秒才追上视角。
 - **部分渲染特性失效**：动态着色 / 天光阴影 / 水面遮挡开关为历史遗留，暂不生效。
 - **旧存档迁移**：在“chunk 坐标修复”之前保存的子关卡可能位于错误的远处区块（只会在那个错误区块被加载时才出现，不会自动恢复），需要一次性迁移脚本。
 - **跨子关卡光照 / 遮挡**未实现。

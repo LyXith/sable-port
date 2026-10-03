@@ -48,6 +48,8 @@
   "sable.configuration.sub_level_occlusion_culling.tooltip": "剔除被其它 section 挡住的子关卡 section（类似原版 section 遮挡图）。",
   "sable.configuration.sub_level_cull_enclosed_blocks": "剔除封闭方块",
   "sable.configuration.sub_level_cull_enclosed_blocks.tooltip": "跳过被不透明邻居完全包住的子关卡方块（实心结构的内部）。",
+  "sable.configuration.sub_level_batched_sections": "按 Section 批量渲染",
+  "sable.configuration.sub_level_batched_sections.tooltip": "每个子关卡的 section 合并成一次地形绘制提交，大型子关卡下大幅提速；关闭则退回逐方块提交。",
   "sable.configuration.sub_level_render_distance": "渲染距离",
   "sable.configuration.sub_level_render_distance.tooltip": "子关卡的最大渲染距离（方块）。-1 表示不按距离剔除。",
   "sable.configuration.sub_level_snapshot_interpolation_delay_ticks": "插值延迟（tick）",

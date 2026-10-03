@@ -52,25 +52,40 @@ LevelPlot plot = subLevel.getPlot();
 
 ### 5.1 子关卡方块
 
-客户端每个子关卡都有一个 `ClientSubLevel`（含 `renderPose()` 渲染位姿）。当前移植分支使用 **vanilla 渲染路径**：
+客户端每个子关卡都有一个 `ClientSubLevel`（含 `renderPose()` 渲染位姿）。当前移植分支使用 **vanilla 渲染路径**，按 section 的编译状态分成两条，由同一个 `isSectionBatchable(...)` 判定分工，保证既不重复绘制也不漏画：
 
-- `SubLevelRenderer` 选择 `SelectedRenderer.VANILLA`，创建 `VanillaSubLevelRenderDispatcher`。
-- `mixin/sublevel_render/impl/vanilla/LevelRendererMixin` 在 `submitTransientBlocks` 的 `TAIL` 遍历所有子关卡的已加载 plot 区块，把每个非空方块通过
-  `SubmitNodeCollector.submitMovingBlock(poseStack, state, 0)` 提交（即原版活塞移动方块的路径）。
+#### 批量路径（默认，`sub_level_batched_sections`）
+
+- `SubLevelRenderer` 选择 `SelectedRenderer.VANILLA`，创建 `VanillaSubLevelRenderDispatcher`。它复用 `LevelRenderer.sectionRenderDispatcher()`，因此子关卡 section 与原版地形共用同一套 section mesh 与 uber vertex / index buffer，编译结果由 `CompileTask` 正常入列。
+- `mixin/sublevel_render/impl/vanilla/LevelRendererMixin` 在 `compileSections` 的 `TAIL` 触发各子关卡的 section 编译。
+- `prepareChunkRenders` / `prepareChunkRendersIndirect` 的 `RETURN` 处，`SubLevelBatchedTerrainRenderer.build(...)` 为每个可见子关卡构造一个自带 `TerrainUniform` UBO 的 `ChunkSectionsToRender.DrawSeparate`。
+- `mixin/sublevel_render/impl/vanilla/ChunkSectionsToRenderMixin` 在原版 `renderGroup` / `renderOit` 的 `TAIL` 把这些 group 画出来（带重入保护）。这样实心、经典半透明与 OIT 三条路径都会自动拾取子关卡，且画在原版地形之后、特征之前，无需各自适配。
+- **UBO 必须用自己的 `DynamicGpuData` 实例**：`RenderSystem.getDynamicUniforms()` 是与原版共享的，原版在构造绘制组时把 `writeChunkSections` 返回的 slice 存进 `DrawIndirect` 并在渲染阶段绑到 slot 1，我们若再写一次会触发 ring buffer 重分配、把原版 slice 所属的旧 buffer 挪进待关闭列表，导致原版崩溃（`Vertex buffer at slot 1 has been closed!`）。`SubLevelBatchedTerrainRenderer` 因此持有私有的 `DynamicGpuData`，每帧 `build()` 开头 `reset()` 回收上一帧的空间，扩容只会波及自己。
+
+**变换如何进入 GPU**：`terrain.vsh` 算的是 `pos = Position + (ChunkPosition − CameraBlockPos) + CameraOffset`，而 `CameraBlockPos = floor(camera)`、`CameraOffset = CameraBlockPos − camera`（见 `GlobalSettingsUniform.update`），所以 `pos = 世界坐标 − 相机`；原版只需在 UBO 里给一个纯视图旋转矩阵。子关卡改写为 `viewRotation · T(position − camera) · R · S · T(camera − rotationPoint − B)`，并把每个 section 原点按整数向量 `B = round(position − rotationPoint)` 偏移（写进 `ChunkSectionInfo`）。代入后恰好得到 `position + R·S·(p − rotationPoint) − camera`，与逐方块路径完全一致，同时让 `pos` 保持小量级 —— 浮点精度和雾效距离因此都正确。子关卡位姿为恒等时整个式子退化为原版行为。
+
+#### 回退路径（逐方块）
+
+- mesh 尚未编译 / 上传的 section（刚加载或正在重建）由 `submitTransientBlocks` 的 `TAIL` 逐方块提交，避免方块短暂缺失：
+  `SubmitNodeCollector.submitMovingBlock(poseStack, state, 0)`（原版活塞移动方块的路径）。
   这条路经支持完整 `PoseStack`，因此旋转 / 缩放 / 非整数位置都能正确处理。
 - 提交时的 pose 为：`T(position - camera) · R · S · T(blockPos - rotationPoint)`，与方块轮廓 (`submitBlockOutline`) 的写法一致。
 - 方块状态通过 `SubLevelMovingBlockRenderState` 提供，其 `getBlockState` 读取 **真实 plot 邻居**，用于面剔除 / AO。
 
-> **面剔除**：vanilla 的 `MovingBlockFeatureRenderer` 把 `cull` 硬编码为 `false`，且 Fabric `fabric-renderer-api-v1` 会把 moving-block 渲染交给 Indigo 的 `AltModelBlockRendererImpl`。因此这里通过 `mixin/sublevel_render/AltModelBlockRendererImplMixin` 强制 Indigo 的 moving-block 渲染 `cull = true`，配合 `SubLevelMovingBlockRenderState` 读取真实邻居来实现面剔除。
+> **面剔除**：vanilla 的 `MovingBlockFeatureRenderer` 把 `cull` 硬编码为 `false`，且 Fabric `fabric-renderer-api-v1` 会把 moving-block 渲染交给 Indigo 的 `AltModelBlockRendererImpl`。因此这里通过 `mixin/sublevel_render/AltModelBlockRendererImplMixin` 强制 Indigo 的 moving-block 渲染 `cull = true`，配合 `SubLevelMovingBlockRenderState` 读取真实邻居来实现面剔除。批量路径的面剔除由 mesh 编译器天然完成。
+
+**半透明排序**：plot section 的 `SectionPos` 落在子关卡自己的网格上而非世界网格，所以 `mixin/sublevel_render/RenderSectionMixin` 拦截 `createVertexSorting`，先用子关卡位姿的逆变换把相机映射进 plot 坐标空间再算排序键。编译与 `resortTransparency` 都走这一个入口，因此无需去共享 dispatcher 的相机位置（那会在渲染线程与 worker 线程之间产生竞态）。含半透明几何的可见 section 每 500 ms 请求一次重排（原版是每帧；这里做节流以免把开销加回这条路径）。
 
 ### 5.2 剔除（`SableClientConfig`）
 
 每帧从配置读取开关（因此改动即时生效）：
 
 - **区块遮挡剔除**（`sub_level_occlusion_culling`）：从相机所在 section 出发做 BFS，只保留能通过“非全不透明面”到达的 section。
-- **封闭方块剔除**（`sub_level_cull_enclosed_blocks`）：跳过被不透明邻居完全包住的方块。
+- **封闭方块剔除**（`sub_level_cull_enclosed_blocks`）：跳过被不透明邻居完全包住的方块（仅回退的逐方块路径用得上；批量路径的 mesh 编译器本身就按可见面生成几何）。
 - **距离剔除**（`sub_level_render_distance`，`-1` 关闭）。
 - **视锥剔除**：用相机 frustum 剔除 section。
+
+遮挡 BFS 要扫遍已加载 section 并对每个方向取一整面 16×16 判定，因此**每帧只算一次**，由提交阶段算、批量构建阶段复用（`SubLevelBatchedTerrainRenderer.beginSubmitFrame()` 开帧，`FRAME_VISIBLE_SECTIONS` 缓存）。共享结果同时保证两个阶段对「哪些 section 可见」的答案一致 —— 这一点是硬要求：提交阶段跳过的正是批量阶段要画的那些 section。
 
 ### 5.3 方块轮廓 / 裂纹 / 音效
 

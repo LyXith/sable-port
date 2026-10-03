@@ -62,6 +62,7 @@ Sable 使用 [Forge Config API Port](https://github.com/Fuzss/forgeconfigapiport
 | 键 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `sub_level_renderer` | enum | `VANILLA` | 子关卡渲染器。当前仅 `VANILLA` 受支持（Sodium 兼容层在本次移植中被剥离）。 |
+| `sub_level_batched_sections` | bool | `true` | 按 section 批量绘制子关卡（走原版地形管线，每个子关卡一次提交）。关闭则退回逐方块提交。 |
 | `sub_level_occlusion_culling` | bool | `true` | 区块级遮挡剔除：从相机所在 section 出发做 BFS，只保留能通过“非全不透明面”到达的 section。 |
 | `sub_level_cull_enclosed_blocks` | bool | `true` | 跳过被不透明邻居完全包住的方块（实心结构内部，从外面看不到）。 |
 | `sub_level_render_distance` | double | `-1.0` | 子关卡的最大渲染距离（格）；`-1` 表示不按距离剔除。 |

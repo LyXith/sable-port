@@ -10,6 +10,7 @@ import dev.ryanhcode.sable.companion.math.BoundingBox3ic;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import dev.ryanhcode.sable.mixinterface.plot.SubLevelContainerHolder;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
+import dev.ryanhcode.sable.sublevel.render.SubLevelBatchedTerrainRenderer;
 import dev.ryanhcode.sable.sublevel.render.SubLevelMovingBlockRenderState;
 import dev.ryanhcode.sable.sublevel.render.SubLevelRenderData;
 import dev.ryanhcode.sable.sublevel.render.vanilla.VanillaChunkedSubLevelRenderData;
@@ -23,25 +24,25 @@ import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.block.MovingBlockRenderState;
+import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
 import net.minecraft.client.renderer.chunk.RenderRegionCache;
+import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.state.OptionsRenderState;
 import net.minecraft.client.renderer.state.level.BlockOutlineRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
-import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import net.minecraft.client.renderer.texture.AbstractTexture;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureManager;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import it.unimi.dsi.fastutil.longs.LongSets;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.ARGB;
-import net.minecraft.util.Mth;
+import net.minecraft.util.Util;
 import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -50,8 +51,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.lighting.LevelLightEngine;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4fc;
 import org.joml.Quaternionf;
 import org.joml.Vector3dc;
 import org.spongepowered.asm.mixin.Final;
@@ -73,6 +74,23 @@ public abstract class LevelRendererMixin {
     @Shadow
     @Final
     private GameRenderer gameRenderer;
+
+    @Shadow
+    @Final
+    private LevelRenderState levelRenderState;
+
+    @Shadow
+    @Final
+    private OptionsRenderState optionsRenderState;
+
+    @Shadow
+    @Final
+    private TextureManager textureManager;
+
+    @Shadow
+    public SectionRenderDispatcher sectionRenderDispatcher() {
+        return null;
+    }
 
     @Shadow
     private void submitHitOutline(final PoseStack poseStack, final SubmitNodeCollector collector, final RenderType renderType, final BlockOutlineRenderState state, final int color, final float width, final boolean afterTerrain) {
@@ -150,13 +168,54 @@ public abstract class LevelRendererMixin {
         }
     }
 
-    // mc26.3: the terrain pipeline (ChunkSectionsToRender / ChunkSectionInfo) no
-    // longer carries a per-section matrix, so sub-level sections cannot be
-    // rotated through it. Vanilla's moving-block path (used for pistons) does
-    // support a full PoseStack, so submit each sub-level block as a moving block
-    // instead. This gives correct rotation, scaling and sub-block positions.
+    /**
+     * Builds this frame's batched plot-terrain groups.
+     *
+     * <p>Both {@code prepareChunkRenders} (separate draws) and {@code prepareChunkRendersIndirect}
+     * (GPU multi-draw) receive the same view-rotation matrix, so hooking both covers either
+     * terrain backend being active. The groups themselves are always plain
+     * {@link ChunkSectionsToRender.DrawSeparate}s, which draw fine next to either of them.
+     */
+    @Inject(method = "prepareChunkRenders", at = @At("RETURN"))
+    private void sable$prepareSubLevelTerrain(final Matrix4fc viewRotation, final boolean reverseTranslucent,
+                                              final CallbackInfoReturnable<ChunkSectionsToRender> cir) {
+        this.sable$buildSubLevelTerrain(viewRotation, reverseTranslucent);
+    }
+
+    @Inject(method = "prepareChunkRendersIndirect", at = @At("RETURN"))
+    private void sable$prepareSubLevelTerrainIndirect(final Matrix4fc viewRotation, final boolean reverseTranslucent,
+                                                      final CallbackInfoReturnable<ChunkSectionsToRender> cir) {
+        this.sable$buildSubLevelTerrain(viewRotation, reverseTranslucent);
+    }
+
+    @Unique
+    private void sable$buildSubLevelTerrain(final Matrix4fc viewRotation, final boolean reverseTranslucent) {
+        final SectionRenderDispatcher dispatcher = this.sectionRenderDispatcher();
+        final AbstractTexture blockAtlas = dispatcher == null
+                ? null
+                : this.textureManager.getTexture(TextureAtlas.LOCATION_BLOCKS);
+
+        // build() clears the previous frame's groups before any of these early-outs, so a
+        // missing dispatcher or atlas means sub-levels simply fall back to per-block
+        // submission instead of replaying stale draws.
+        SubLevelBatchedTerrainRenderer.build(
+                viewRotation,
+                reverseTranslucent,
+                this.levelRenderState.cameraRenderState.pos,
+                Util.toMillis(this.optionsRenderState.chunkSectionFadeInTime),
+                dispatcher,
+                blockAtlas == null ? null : blockAtlas.getTextureView()
+        );
+    }
+
+    // mc26.3: sub-level sections are normally drawn in one batch per sub-level through
+    // vanilla's terrain pipeline (SubLevelBatchedTerrainRenderer), using the section
+    // meshes already compiled for them. Sections whose mesh is not compiled/uploaded yet
+    // fall back to submitting each block as a moving block, so nothing pops in late.
     @Inject(method = "submitTransientBlocks", at = @At("TAIL"))
     private void sable$submitSubLevelBlocks(final PoseStack poseStack, final SubmitNodeCollector collector, final LevelRenderState levelRenderState, final CallbackInfo ci) {
+        SubLevelBatchedTerrainRenderer.beginSubmitFrame();
+
         final ClientLevel clientLevel = Minecraft.getInstance().level;
         if (clientLevel == null) {
             return;
@@ -178,6 +237,9 @@ public abstract class LevelRendererMixin {
         final boolean cullEnclosedBlocks = SableClientConfig.SUB_LEVEL_CULL_ENCLOSED_BLOCKS.get();
         final double renderDistance = SableClientConfig.SUB_LEVEL_RENDER_DISTANCE.get();
         final double renderDistanceSq = renderDistance <= 0.0 ? Double.POSITIVE_INFINITY : renderDistance * renderDistance;
+
+        final boolean batched = SubLevelBatchedTerrainRenderer.isEnabled();
+        final SectionRenderDispatcher dispatcher = batched ? this.sectionRenderDispatcher() : null;
 
         for (final ClientSubLevel subLevel : container.getAllSubLevels()) {
             final LevelPlot plot = subLevel.getPlot();
@@ -211,7 +273,9 @@ public abstract class LevelRendererMixin {
             }
 
             // 遮挡剔除：从相机所在 section 出发，只穿过非全不透明面扩散。
-            final LongSet visibleSections = occlusionCulling ? sable$computeVisibleSections(plot, pose, cameraPos) : null;
+            final LongSet visibleSections = occlusionCulling
+                    ? SubLevelBatchedTerrainRenderer.computeVisibleSections(plot, pose, cameraPos)
+                    : null;
 
             // 只遍历已加载区块中的非空 section，并按视锥剔除。
             for (final PlotChunkHolder holder : plot.getLoadedChunks()) {
@@ -236,12 +300,19 @@ public abstract class LevelRendererMixin {
                     }
 
                     final int sectionMinY = sectionY << 4;
-                    if (frustum != null && !frustum.isVisible(sable$sectionBounds(pose, chunkPos, sectionMinY))) {
+                    if (frustum != null && !frustum.isVisible(SubLevelBatchedTerrainRenderer.sectionBounds(pose, chunkPos, sectionMinY))) {
                         continue;
                     }
 
-                    // 复用缓存的可见方块列表：仅在 section 内容变化时重建，避免每帧重新扫描 16³ 个方块、
-                    // 重复做封闭剔除与生物群系查找。提交仍是逐方块（26.3 的地形管线不支持逐 section 旋转）。
+                    // 已编译的 section 由批量地形路径绘制（每个子关卡一次 draw），这里直接跳过；
+                    // 只有 mesh 还没编译/上传的 section 才退回逐方块提交，避免刚加载时方块缺失。
+                    if (batched && SubLevelBatchedTerrainRenderer.isSectionBatchable(
+                            dispatcher, chunkedRenderData.getRenderSection(SectionPos.of(sectionNode)))) {
+                        continue;
+                    }
+
+                    // 回退路径：复用缓存的可见方块列表，仅在 section 内容变化时重建，
+                    // 避免每帧重新扫描 16³ 个方块、重复做封闭剔除与生物群系查找。
                     final VanillaChunkedSubLevelRenderData.VisibleBlocks visible = chunkedRenderData.sable$getVisibleBlocks(
                             sectionNode, section, sectionMinY, chunkPos.x << 4, chunkPos.z << 4, cullEnclosedBlocks);
                     final BlockPos[] visiblePositions = visible.positions;
@@ -286,154 +357,6 @@ public abstract class LevelRendererMixin {
         }
 
         RopeManager.renderAll(poseStack, collector, cameraPos);
-    }
-
-    /**
-     * 从相机所在 section 出发，只穿过「非全不透明面」扩散，得到可见 section 集合。
-     * 相机不在结构内时返回全部非空 section（仍会走视锥/距离剔除），避免从外部误剔。
-     */
-    @Unique
-    private static LongSet sable$computeVisibleSections(final LevelPlot plot, final Pose3dc pose, final Vec3 cameraPos) {
-        final Long2ObjectMap<LevelChunkSection> sections = new Long2ObjectOpenHashMap<>();
-
-        for (final PlotChunkHolder holder : plot.getLoadedChunks()) {
-            final LevelChunk chunk = holder.getChunk();
-            if (chunk == null) {
-                continue;
-            }
-
-            final LevelChunkSection[] chunkSections = chunk.getSections();
-            for (int i = 0; i < chunkSections.length; i++) {
-                final LevelChunkSection section = chunkSections[i];
-                if (section == null || section.hasOnlyAir()) {
-                    continue;
-                }
-
-                sections.put(SectionPos.asLong(chunk.getPos().x, chunk.getSectionYFromSectionIndex(i), chunk.getPos().z), section);
-            }
-        }
-
-        if (sections.isEmpty()) {
-            return LongSets.emptySet();
-        }
-
-        final Vec3 cameraPlot = pose.transformPositionInverse(cameraPos);
-        final long start = SectionPos.asLong(
-                Mth.floor(cameraPlot.x) >> 4,
-                Mth.floor(cameraPlot.y) >> 4,
-                Mth.floor(cameraPlot.z) >> 4
-        );
-
-        if (!sections.containsKey(start)) {
-            return new LongOpenHashSet(sections.keySet());
-        }
-
-        final LongSet visible = new LongOpenHashSet();
-        final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
-
-        visible.add(start);
-        queue.enqueue(start);
-
-        while (!queue.isEmpty()) {
-            final long node = queue.dequeueLong();
-            final LevelChunkSection section = sections.get(node);
-
-            final int x = SectionPos.x(node);
-            final int y = SectionPos.y(node);
-            final int z = SectionPos.z(node);
-
-            for (final Direction direction : Direction.values()) {
-                if (sable$faceOpaque(section, direction)) {
-                    continue;
-                }
-
-                final long next = SectionPos.asLong(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ());
-
-                if (sections.containsKey(next) && visible.add(next)) {
-                    queue.enqueue(next);
-                }
-            }
-        }
-
-        return visible;
-    }
-
-    @Unique
-    private static boolean sable$faceOpaque(final LevelChunkSection section, final Direction direction) {
-        switch (direction) {
-            case DOWN -> {
-                for (int x = 0; x < 16; x++) {
-                    for (int z = 0; z < 16; z++) {
-                        if (!section.getBlockState(x, 0, z).canOcclude()) return false;
-                    }
-                }
-            }
-            case UP -> {
-                for (int x = 0; x < 16; x++) {
-                    for (int z = 0; z < 16; z++) {
-                        if (!section.getBlockState(x, 15, z).canOcclude()) return false;
-                    }
-                }
-            }
-            case NORTH -> {
-                for (int x = 0; x < 16; x++) {
-                    for (int y = 0; y < 16; y++) {
-                        if (!section.getBlockState(x, y, 0).canOcclude()) return false;
-                    }
-                }
-            }
-            case SOUTH -> {
-                for (int x = 0; x < 16; x++) {
-                    for (int y = 0; y < 16; y++) {
-                        if (!section.getBlockState(x, y, 15).canOcclude()) return false;
-                    }
-                }
-            }
-            case WEST -> {
-                for (int y = 0; y < 16; y++) {
-                    for (int z = 0; z < 16; z++) {
-                        if (!section.getBlockState(0, y, z).canOcclude()) return false;
-                    }
-                }
-            }
-            case EAST -> {
-                for (int y = 0; y < 16; y++) {
-                    for (int z = 0; z < 16; z++) {
-                        if (!section.getBlockState(15, y, z).canOcclude()) return false;
-                    }
-                }
-            }
-        }
-
-        return true;
-    }
-
-    @Unique
-    private static AABB sable$sectionBounds(final Pose3dc pose, final ChunkPos chunkPos, final int sectionMinY) {
-        final int minX = chunkPos.x << 4;
-        final int minZ = chunkPos.z << 4;
-        double x0 = Double.POSITIVE_INFINITY;
-        double y0 = Double.POSITIVE_INFINITY;
-        double z0 = Double.POSITIVE_INFINITY;
-        double x1 = Double.NEGATIVE_INFINITY;
-        double y1 = Double.NEGATIVE_INFINITY;
-        double z1 = Double.NEGATIVE_INFINITY;
-
-        for (int dx = 0; dx <= 16; dx += 16) {
-            for (int dy = 0; dy <= 16; dy += 16) {
-                for (int dz = 0; dz <= 16; dz += 16) {
-                    final Vec3 corner = pose.transformPosition(new Vec3(minX + dx, sectionMinY + dy, minZ + dz));
-                    x0 = Math.min(x0, corner.x);
-                    y0 = Math.min(y0, corner.y);
-                    z0 = Math.min(z0, corner.z);
-                    x1 = Math.max(x1, corner.x);
-                    y1 = Math.max(y1, corner.y);
-                    z1 = Math.max(z1, corner.z);
-                }
-            }
-        }
-
-        return new AABB(x0, y0, z0, x1, y1, z1);
     }
 
     @Inject(method = "isSectionCompiledAndVisible", at = @At("HEAD"), cancellable = true)

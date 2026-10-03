@@ -18,6 +18,7 @@ public final class SableClientConfig {
     public static final ModConfigSpec.BooleanValue DEBUG_DRAW_LOADED_CHUNKS;
     public static final ModConfigSpec.BooleanValue SUB_LEVEL_OCCLUSION_CULLING;
     public static final ModConfigSpec.BooleanValue SUB_LEVEL_CULL_ENCLOSED_BLOCKS;
+    public static final ModConfigSpec.BooleanValue SUB_LEVEL_BATCHED_SECTIONS;
     public static final ModConfigSpec.DoubleValue SUB_LEVEL_RENDER_DISTANCE;
     public static final ModConfigSpec.DoubleValue INTERPOLATION_DELAY;
     public static final ModConfigSpec.EnumValue<SubLevelRenderer.SelectedRenderer> SELECTED_RENDERER;
@@ -48,6 +49,11 @@ public final class SableClientConfig {
                 .comment("Whether to skip sub-level blocks that are completely enclosed by opaque neighbours",
                         "(invisible from the outside, typically the interior of solid structures)")
                 .define("sub_level_cull_enclosed_blocks", true);
+        SUB_LEVEL_BATCHED_SECTIONS = builder
+                .comment("Whether to draw sub-level sections in one batch per sub-level through the terrain pipeline.",
+                        "This is the fast path: compiled section meshes are submitted once instead of one moving",
+                        "block per block each frame. Turn off to fall back to per-block submission.")
+                .define("sub_level_batched_sections", true);
         SUB_LEVEL_RENDER_DISTANCE = builder
                 .comment("Maximum render distance (in blocks) for sub-levels.",
                         "Set to -1 to disable distance culling.")

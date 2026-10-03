@@ -418,6 +418,12 @@ public class VanillaChunkedSubLevelRenderData implements SubLevelRenderData {
             return null;
         }
 
+        // getIndex() is a flat linearisation and would silently alias an out-of-bounds
+        // section onto a valid slot, so the bounds check has to come first.
+        if (!this.inBounds(sectionPos.getX(), sectionPos.getY(), sectionPos.getZ())) {
+            return null;
+        }
+
         final int index = this.getIndex(sectionPos.getX(), sectionPos.getY(), sectionPos.getZ());
 
         if (index < 0 || index >= this.renderSections.length) {

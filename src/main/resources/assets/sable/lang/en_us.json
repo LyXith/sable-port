@@ -247,6 +247,10 @@
 
   "sable.configuration.sub_level_cull_enclosed_blocks.tooltip": "Skip sub-level blocks fully enclosed by opaque neighbours (the interior of solid structures).",
 
+  "sable.configuration.sub_level_batched_sections": "Batched Section Rendering",
+
+  "sable.configuration.sub_level_batched_sections.tooltip": "Draw sub-level sections in one batch per sub-level through the terrain pipeline. Much faster on large sub-levels; turn off to fall back to submitting every block individually.",
+
   "sable.configuration.sub_level_render_distance": "Render Distance",
 
   "sable.configuration.sub_level_render_distance.tooltip": "Maximum render distance (in blocks) for sub-levels. -1 disables distance culling.",
