@@ -94,8 +94,6 @@ gradle runServer   # 服务端，工作目录 runs/server
 | `storage` | `find` `find_all_sub_levels` |
 | `debug config` | `substeps` `solver_iterations` `pgs_iterations` `stabilization_iterations` `contact_spring_natural_frequency` `contact_spring_damping_ratio` `min_island_size` |
 
-> 上游的 `/sable test` 示例命令在本移植中被移除；如需参考服务端 API 用法，见 [`docs/creating-a-physics-sublevel.md`](docs/creating-a-physics-sublevel.md)。
-
 ---
 
 ## 目录结构
