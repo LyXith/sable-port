@@ -58,8 +58,6 @@ build/libs/sable-fabric-26.3-3.0.0.jar        # 发布用
 build/libs/sable-fabric-26.3-3.0.0-sources.jar
 ```
 
-> 仓库内的 `*.bak` 文件是移植过程中保留的改动前备份，已在 `processResources` 中被排除，不会进入构建产物。
-
 ## 运行（开发环境）
 
 ```bash
