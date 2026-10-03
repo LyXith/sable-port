@@ -8,6 +8,8 @@ import dev.ryanhcode.sable.companion.math.BoundingBox3ic;
 import dev.ryanhcode.sable.platform.SableChunkEventPlatform;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import dev.ryanhcode.sable.sublevel.SubLevel;
+import it.unimi.dsi.fastutil.longs.Long2IntMap;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.core.*;
@@ -83,6 +85,23 @@ public abstract class LevelPlot {
      * All block entity reaction wheels within this plot
      */
     private final Object2ObjectOpenHashMap<BlockPos, BlockEntitySubLevelReactionWheel> blockEntityReactionWheels = new Object2ObjectOpenHashMap<>();
+
+    /**
+     * 每个区块 section 的渲染内容版本号，方块变化时自增。
+     *
+     * <p>客户端子关卡渲染的「可见方块列表」缓存以此失效：只有真正变化的 section 才会重建，
+     * 避免每帧重新扫描 16³ 个方块。运行于服务端时只是少量内存开销。
+     */
+    private final Long2IntMap sable$renderRevisions = new Long2IntOpenHashMap();
+
+    /**
+     * @param sectionNode {@link SectionPos#asLong()} 表示的 section
+     * @return 该 section 当前的渲染内容版本号
+     */
+    @ApiStatus.Internal
+    public int sable$getRenderRevision(final long sectionNode) {
+        return this.sable$renderRevisions.getOrDefault(sectionNode, 0);
+    }
     /**
      * If the plot should expand and add new chunks when blocks reach the edge of existing chunks.
      */
@@ -459,6 +478,9 @@ public abstract class LevelPlot {
             if (reactionWheel != null && this.subLevel instanceof final ServerSubLevel serverSubLevel)
                 serverSubLevel.getReactionWheelManager().wheelChanged(pos, reactionWheel, false);
         }
+
+        final long sectionNode = SectionPos.of(pos).asLong();
+        this.sable$renderRevisions.put(sectionNode, this.sable$renderRevisions.getOrDefault(sectionNode, 0) + 1);
     }
 
     /**

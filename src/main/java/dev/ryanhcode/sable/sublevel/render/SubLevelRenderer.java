@@ -85,6 +85,7 @@ public final class SubLevelRenderer {
             public SubLevelRenderDispatcher create() {
                 return new VanillaSubLevelRenderDispatcher();
             }
+
         };
 
         public abstract boolean isSupported();

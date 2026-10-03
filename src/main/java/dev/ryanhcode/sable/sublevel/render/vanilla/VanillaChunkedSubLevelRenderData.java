@@ -5,7 +5,10 @@ import dev.ryanhcode.sable.companion.math.BoundingBox3ic;
 import dev.ryanhcode.sable.companion.math.JOMLConversion;
 import dev.ryanhcode.sable.mixinterface.sublevel_render.vanilla.RenderSectionExtension;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
+import dev.ryanhcode.sable.sublevel.plot.LevelPlot;
 import dev.ryanhcode.sable.sublevel.render.SubLevelRenderData;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -19,11 +22,19 @@ import net.minecraft.client.renderer.chunk.RenderRegionCache;
 import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.profiling.ProfilerFiller;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import org.joml.*;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * A renderer and view area for a {@link dev.ryanhcode.sable.sublevel.SubLevel}.
@@ -69,6 +80,31 @@ public class VanillaChunkedSubLevelRenderData implements SubLevelRenderData {
      * The section render dispatcher to build sections through
      */
     private final SectionRenderDispatcher sectionRenderDispatcher;
+
+    /**
+     * 每 section 缓存的「可见方块列表」：避免每帧重新扫描 16³ 个方块、重复做封闭剔除与生物群系查找。
+     * 方块变化时通过 {@link LevelPlot#sable$getRenderRevision(long)} 失效。
+     */
+    private final Long2ObjectMap<VisibleBlocks> sable$visibleBlocks = new Long2ObjectOpenHashMap<>();
+
+    /**
+     * 一个 section 内需要渲染的方块（已剔除空气与完全封闭的方块），配合版本号做缓存复用。
+     */
+    public static final class VisibleBlocks {
+        public final long revision;
+        public final boolean cullEnclosed;
+        public final BlockPos[] positions;
+        public final BlockState[] states;
+        public final Holder<Biome>[] biomes;
+
+        VisibleBlocks(final long revision, final boolean cullEnclosed, final BlockPos[] positions, final BlockState[] states, final Holder<Biome>[] biomes) {
+            this.revision = revision;
+            this.cullEnclosed = cullEnclosed;
+            this.positions = positions;
+            this.states = states;
+            this.biomes = biomes;
+        }
+    }
 
     /**
      * Creates a new renderer for the given sub-level
@@ -126,6 +162,7 @@ public class VanillaChunkedSubLevelRenderData implements SubLevelRenderData {
         this.renderSections = null;
         this.allRenderSections.clear();
         this.dirtyRenderSections.clear();
+        this.sable$visibleBlocks.clear();
 
         final BoundingBox3ic bounds = this.subLevel.getPlot().getBoundingBox();
 
@@ -309,6 +346,71 @@ public class VanillaChunkedSubLevelRenderData implements SubLevelRenderData {
         }
         this.allRenderSections.clear();
         this.renderSections = null;
+        this.sable$visibleBlocks.clear();
+    }
+
+    /**
+     * 返回指定 plot section 的可见方块列表（带缓存）。
+     *
+     * <p>仅在 section 内容变化（{@code plot.sable$getRenderRevision} 改变）或封闭剔除开关切换时重建，
+     * 否则直接复用上一帧的结果。
+     */
+    public VisibleBlocks sable$getVisibleBlocks(final long sectionNode, final LevelChunkSection section, final int sectionMinY,
+                                                final int baseX, final int baseZ, final boolean cullEnclosedEnabled) {
+        final int revision = this.subLevel.getPlot().sable$getRenderRevision(sectionNode);
+        final VisibleBlocks cached = this.sable$visibleBlocks.get(sectionNode);
+        if (cached != null && cached.revision == revision && cached.cullEnclosed == cullEnclosedEnabled) {
+            return cached;
+        }
+
+        final Level level = this.subLevel.getLevel();
+        final List<BlockPos> positions = new ArrayList<>();
+        final List<BlockState> states = new ArrayList<>();
+        final List<Holder<Biome>> biomes = new ArrayList<>();
+
+        for (int localX = 0; localX < 16; localX++) {
+            for (int localY = 0; localY < 16; localY++) {
+                for (int localZ = 0; localZ < 16; localZ++) {
+                    final BlockState blockState = section.getBlockState(localX, localY, localZ);
+                    if (blockState.isAir()) {
+                        continue;
+                    }
+
+                    final BlockPos blockPos = new BlockPos(baseX + localX, sectionMinY + localY, baseZ + localZ);
+                    if (cullEnclosedEnabled && blockState.isSolidRender() && sable$isFullyEnclosed(level, blockPos)) {
+                        continue;
+                    }
+
+                    positions.add(blockPos);
+                    states.add(blockState);
+                    biomes.add(level.getBiome(blockPos));
+                }
+            }
+        }
+
+        final VisibleBlocks built = new VisibleBlocks(
+                revision,
+                cullEnclosedEnabled,
+                positions.toArray(new BlockPos[0]),
+                states.toArray(new BlockState[0]),
+                sable$biomeArray(biomes)
+        );
+        this.sable$visibleBlocks.put(sectionNode, built);
+        return built;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Holder<Biome>[] sable$biomeArray(final List<Holder<Biome>> biomes) {
+        return biomes.toArray(new Holder[0]);
+    }
+
+    private static boolean sable$isFullyEnclosed(final Level level, final BlockPos pos) {
+        for (final Direction direction : Direction.values()) {
+            if (!level.getBlockState(pos.relative(direction)).canOcclude()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public SectionRenderDispatcher.RenderSection getRenderSection(final SectionPos sectionPos) {

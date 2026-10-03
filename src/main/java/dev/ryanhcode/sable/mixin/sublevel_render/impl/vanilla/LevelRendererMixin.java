@@ -12,6 +12,7 @@ import dev.ryanhcode.sable.mixinterface.plot.SubLevelContainerHolder;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
 import dev.ryanhcode.sable.sublevel.render.SubLevelMovingBlockRenderState;
 import dev.ryanhcode.sable.sublevel.render.SubLevelRenderData;
+import dev.ryanhcode.sable.sublevel.render.vanilla.VanillaChunkedSubLevelRenderData;
 import dev.ryanhcode.sable.sublevel.plot.LevelPlot;
 import dev.ryanhcode.sable.sublevel.plot.PlotChunkHolder;
 import net.minecraft.client.Camera;
@@ -37,14 +38,18 @@ import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.longs.LongSets;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
@@ -188,6 +193,12 @@ public abstract class LevelRendererMixin {
             this.sable$subLevelRotation.set(pose.orientation());
 
             final Level plotLevel = subLevel.getLevel();
+            final SubLevelRenderData renderData = subLevel.getRenderData();
+            if (!(renderData instanceof final VanillaChunkedSubLevelRenderData chunkedRenderData)) {
+                continue;
+            }
+            final CardinalLighting cardinalLighting = ((ClientLevel) plotLevel).cardinalLighting();
+            final LevelLightEngine lightEngine = plotLevel.getLightEngine();
 
             // 距离剔除：整个子关卡远到看不见时直接跳过。
             final Vec3 worldCenter = pose.transformPosition(new Vec3(
@@ -219,7 +230,8 @@ public abstract class LevelRendererMixin {
                     }
 
                     final int sectionY = chunk.getSectionYFromSectionIndex(sectionIndex);
-                    if (visibleSections != null && !visibleSections.contains(SectionPos.asLong(chunkPos.x, sectionY, chunkPos.z))) {
+                    final long sectionNode = SectionPos.asLong(chunkPos.x, sectionY, chunkPos.z);
+                    if (visibleSections != null && !visibleSections.contains(sectionNode)) {
                         continue;
                     }
 
@@ -228,65 +240,52 @@ public abstract class LevelRendererMixin {
                         continue;
                     }
 
-                    for (int localX = 0; localX < 16; localX++) {
-                        for (int localY = 0; localY < 16; localY++) {
-                            for (int localZ = 0; localZ < 16; localZ++) {
-                                final BlockState blockState = section.getBlockState(localX, localY, localZ);
-                                if (blockState.isAir()) {
-                                    continue;
-                                }
-
-                                final BlockPos blockPos = new BlockPos(
-                                        (chunkPos.x << 4) + localX,
-                                        sectionMinY + localY,
-                                        (chunkPos.z << 4) + localZ
-                                );
-
-                                // 方块级遮挡剔除：完全被不透明邻居包住的方块从外面看不到，
-                                // 直接跳过（对实心结构是最大的一笔开销节省）。
-                                if (cullEnclosedBlocks && blockState.isSolidRender() && sable$isFullyEnclosed(plotLevel, blockPos)) {
-                                    continue;
-                                }
-
-                                final SubLevelMovingBlockRenderState state = new SubLevelMovingBlockRenderState();
-                                state.sable$setLevel(plotLevel);
-                                state.blockPos = blockPos;
-                                state.randomSeedPos = blockPos;
-                                state.blockState = blockState;
-                                state.biome = plotLevel.getBiome(blockPos);
-                                state.cardinalLighting = ((ClientLevel) plotLevel).cardinalLighting();
-                                state.lightEngine = plotLevel.getLightEngine();
-
-                                poseStack.pushPose();
-                                // plot -> world (camera relative): T(position - camera) * R * S
-                                poseStack.translate(position.x() - camX, position.y() - camY, position.z() - camZ);
-                                poseStack.rotate(this.sable$subLevelRotation);
-                                poseStack.scale((float) scale.x(), (float) scale.y(), (float) scale.z());
-                                poseStack.translate(
-                                        blockPos.getX() - rotationPoint.x(),
-                                        blockPos.getY() - rotationPoint.y(),
-                                        blockPos.getZ() - rotationPoint.z()
-                                );
-                                collector.submitMovingBlock(poseStack, state, 0);
-                                poseStack.popPose();
-                            }
-                        }
+                    // 复用缓存的可见方块列表：仅在 section 内容变化时重建，避免每帧重新扫描 16³ 个方块、
+                    // 重复做封闭剔除与生物群系查找。提交仍是逐方块（26.3 的地形管线不支持逐 section 旋转）。
+                    final VanillaChunkedSubLevelRenderData.VisibleBlocks visible = chunkedRenderData.sable$getVisibleBlocks(
+                            sectionNode, section, sectionMinY, chunkPos.x << 4, chunkPos.z << 4, cullEnclosedBlocks);
+                    final BlockPos[] visiblePositions = visible.positions;
+                    if (visiblePositions.length == 0) {
+                        continue;
                     }
+                    final BlockState[] visibleStates = visible.states;
+                    final Holder<Biome>[] visibleBiomes = visible.biomes;
+
+                    // 每 section 只 push/pop 一次 PoseStack；每个方块只做局部平移/撤销。
+                    // submitMovingBlock 会拷贝当前 pose 矩阵，因此修改 PoseStack 不会影响已提交节点。
+                    poseStack.pushPose();
+                    // plot -> world (camera relative): T(position - camera) * R * S
+                    poseStack.translate(position.x() - camX, position.y() - camY, position.z() - camZ);
+                    poseStack.rotate(this.sable$subLevelRotation);
+                    poseStack.scale((float) scale.x(), (float) scale.y(), (float) scale.z());
+
+                    for (int i = 0; i < visiblePositions.length; i++) {
+                        final BlockPos blockPos = visiblePositions[i];
+                        final double localX = blockPos.getX() - rotationPoint.x();
+                        final double localY = blockPos.getY() - rotationPoint.y();
+                        final double localZ = blockPos.getZ() - rotationPoint.z();
+                        poseStack.translate(localX, localY, localZ);
+
+                        final SubLevelMovingBlockRenderState state = new SubLevelMovingBlockRenderState();
+                        state.sable$setLevel(plotLevel);
+                        state.blockPos = blockPos;
+                        state.randomSeedPos = blockPos;
+                        state.blockState = visibleStates[i];
+                        state.biome = visibleBiomes[i];
+                        state.cardinalLighting = cardinalLighting;
+                        state.lightEngine = lightEngine;
+
+                        collector.submitMovingBlock(poseStack, state, 0);
+
+                        poseStack.translate(-localX, -localY, -localZ);
+                    }
+
+                    poseStack.popPose();
                 }
             }
         }
 
         RopeManager.renderAll(poseStack, collector, cameraPos);
-    }
-
-    @Unique
-    private static boolean sable$isFullyEnclosed(final Level level, final BlockPos pos) {
-        for (final Direction direction : Direction.values()) {
-            if (!level.getBlockState(pos.relative(direction)).canOcclude()) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /**
