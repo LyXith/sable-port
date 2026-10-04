@@ -1,4 +1,4 @@
-# Sable（Fabric / Minecraft 26.3 移植版）
+# Sable（Fabric / Minecraft 26.3 移植版）Warning 本项目大量使用AI
 
 Sable 是一个为方块世界加入**可交互的物理化移动结构**的模组：把一片世界区域“组装”成一个独立的子关卡（sub-level），交给刚体物理持续模拟，它可以移动、旋转、被撞击、被踩踏、被挖掘，而其中的方块依旧是真正的方块。
 
