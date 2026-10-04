@@ -32,19 +32,15 @@ public class LevelRendererMixin {
         final EntityTransformationExtension transformation = (EntityTransformationExtension) renderState;
         final Quaternionf orientation = transformation.sable$getSubLevelOrientation();
         final Vector3f scale = transformation.sable$getSubLevelScale();
-
-        if (orientation == null || scale == null) {
-            original.call(instance, renderState, camera, x, y, z, poseStack, submitNodeCollector);
-            return;
-        }
-
-        final Matrix4f matrix = new Matrix4f()
-                .rotate(orientation)
-                .scale(scale);
+        final Vector3f pivot = transformation.sable$getSubLevelPivot();
 
         poseStack.pushPose();
+
         poseStack.translate(x, y, z);
-        poseStack.mulPose(matrix);
+        poseStack.translate(pivot.x, pivot.y, pivot.z);
+        poseStack.scale(scale.x, scale.y, scale.z);
+        poseStack.rotate(orientation);
+        poseStack.translate(-pivot.x, -pivot.y, -pivot.z);
         poseStack.translate(-x, -y, -z);
 
         original.call(instance, renderState, camera, x, y, z, poseStack, submitNodeCollector);

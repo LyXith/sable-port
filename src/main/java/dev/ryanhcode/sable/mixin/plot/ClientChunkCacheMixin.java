@@ -77,7 +77,6 @@ public abstract class ClientChunkCacheMixin implements DebugChunkProviderAttachm
 
         if (container.inBounds(chunkPos)) {
             ci.cancel();
-            throw new UnsupportedOperationException("Cannot drop chunks in plot");
         }
     }
 

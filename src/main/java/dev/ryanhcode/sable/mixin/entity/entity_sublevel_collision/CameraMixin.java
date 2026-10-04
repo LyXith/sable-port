@@ -41,6 +41,20 @@ public class CameraMixin {
 
         final Entity entity = instance.entity();
         final SubLevel trackingSubLevel = Sable.HELPER.getTrackingOrVehicleSubLevel(entity);
+        final SubLevel containingSubLevel = Sable.HELPER.getContaining(entity.level(), entity.position());
+
+        if (containingSubLevel instanceof final ClientSubLevel clientSubLevel) {
+            final double yOffset = Mth.lerp(partialTicks, this.eyeHeightOld, this.eyeHeight);
+
+            this.sable$startPos.set(entity.xo, entity.yo + yOffset, entity.zo);
+            this.sable$endPos.set(entity.getX(), entity.getY() + yOffset, entity.getZ());
+
+            this.sable$startPos.lerp(this.sable$endPos, partialTicks);                     // 在 plot 帧里插值
+            clientSubLevel.renderPose(partialTicks).transformPosition(this.sable$startPos); // 投影出来
+
+            original.call(instance, this.sable$startPos.x, this.sable$startPos.y, this.sable$startPos.z);
+            return;
+        }
 
         if (trackingSubLevel instanceof final ClientSubLevel clientSubLevel) {
             final double yOffset = Mth.lerp(partialTicks, this.eyeHeightOld, this.eyeHeight);

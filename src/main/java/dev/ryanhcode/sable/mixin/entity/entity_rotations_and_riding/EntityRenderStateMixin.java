@@ -15,6 +15,9 @@ public class EntityRenderStateMixin implements EntityTransformationExtension {
     @Unique
     private Vector3f sable$scale;
 
+    @Unique
+    private Vector3f sable$pivot;
+
     @Override
     public void sable$setSubLevelOrientation(Quaternionf orientation) {
         this.sable$orientation = orientation;
@@ -26,6 +29,11 @@ public class EntityRenderStateMixin implements EntityTransformationExtension {
     }
 
     @Override
+    public void sable$setSubLevelPivot(Vector3f pivot) {
+        this.sable$pivot = pivot;
+    }
+
+    @Override
     public Quaternionf sable$getSubLevelOrientation() {
         return this.sable$orientation;
     }
@@ -33,5 +41,10 @@ public class EntityRenderStateMixin implements EntityTransformationExtension {
     @Override
     public Vector3f sable$getSubLevelScale() {
         return this.sable$scale;
+    }
+
+    @Override
+    public Vector3f sable$getSubLevelPivot() {
+        return this.sable$pivot;
     }
 }
