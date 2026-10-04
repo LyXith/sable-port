@@ -440,10 +440,6 @@ public class SubLevelEntityCollision {
                                 JOMLConversion.toJOML(entity.getDeltaMovement(), existingDeltaMovement);
                                 final Vector3d deltaMovementLoss = normalizedMtv.mul(normalizedMtv.dot(existingDeltaMovement));
 
-                                if (deltaMovementLoss.length() > existingDeltaMovement.length() * 0.1) {
-                                    entity.setSprinting(false);
-                                }
-
                                 // TODO: Vanilla has friction values for these. We should be using those
                                 final double friction = 0.995;
                                 final Vector3d newDeltaMovement = existingDeltaMovement.sub(deltaMovementLoss);
