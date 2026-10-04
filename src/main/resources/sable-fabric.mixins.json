@@ -7,7 +7,6 @@
   "client": [
     "camera_rotation.CameraMixin",
     "compatibility.zume.ModernZumeMixin",
-    "fix_bundle_packet.ClientPacketListenerMixin",
     "sound.MovingSoundInstanceDelegateMixin"
   ],
   "mixins": [

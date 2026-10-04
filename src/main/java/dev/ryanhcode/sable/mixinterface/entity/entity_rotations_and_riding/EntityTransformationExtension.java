@@ -8,7 +8,11 @@ public interface EntityTransformationExtension {
 
     void sable$setSubLevelScale(Vector3f scale);
 
+    void sable$setSubLevelPivot(Vector3f pivot);
+
     Quaternionf sable$getSubLevelOrientation();
 
     Vector3f sable$getSubLevelScale();
+
+    Vector3f sable$getSubLevelPivot();
 }

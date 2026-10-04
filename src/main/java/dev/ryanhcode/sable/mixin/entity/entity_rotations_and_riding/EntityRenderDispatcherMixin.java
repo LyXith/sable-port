@@ -44,6 +44,13 @@ public class EntityRenderDispatcherMixin {
     private <E extends Entity> void sable$captureEntity(final E entity, final float partialTicks, final CallbackInfoReturnable<EntityRenderState> cir) {
         final EntityRenderState renderState = cir.getReturnValue();
         final ClientSubLevel clientSubLevel = Sable.HELPER.getContainingClient(entity);
+        final EntityTransformationExtension transformation = (EntityTransformationExtension) renderState;
+        final Quaterniond orientation = EntitySubLevelRotationHelper.getEntityOrientation(
+                entity,
+                subLevel -> ((ClientSubLevel) subLevel).renderPose(partialTicks),
+                partialTicks,
+                EntitySubLevelRotationHelper.Type.ENTITY
+        );
 
         if (clientSubLevel != null) {
             final Pose3dc pose = clientSubLevel.renderPose(partialTicks);
@@ -58,13 +65,17 @@ public class EntityRenderDispatcherMixin {
             renderState.y = pos.y;
             renderState.z = pos.z;
 
-            final EntityTransformationExtension transformation = (EntityTransformationExtension) renderState;
             transformation.sable$setSubLevelOrientation(new Quaternionf(pose.orientation()));
             transformation.sable$setSubLevelScale(new Vector3f(pose.scale()));
+            transformation.sable$setSubLevelPivot(new Vector3f(0, 0, 0));
+        } else if (orientation != null) {
+            transformation.sable$setSubLevelOrientation(new Quaternionf(orientation));
+            transformation.sable$setSubLevelScale(new Vector3f(1, 1, 1));
+            transformation.sable$setSubLevelPivot(new Vector3f(entity.getEyePosition(partialTicks).subtract(entity.position()).toVector3f()));
         } else {
-            final EntityTransformationExtension transformation = (EntityTransformationExtension) renderState;
-            transformation.sable$setSubLevelOrientation(null);
-            transformation.sable$setSubLevelScale(null);
+            transformation.sable$setSubLevelOrientation(new Quaternionf());
+            transformation.sable$setSubLevelScale(new Vector3f(1, 1, 1));
+            transformation.sable$setSubLevelPivot(new Vector3f(0, 0, 0));
         }
 
         this.sable$adjustLeashes(entity, renderState);
