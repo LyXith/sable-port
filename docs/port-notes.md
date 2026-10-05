@@ -93,6 +93,10 @@ Create 把「本维度坐标」当世界坐标用的地方，在子关卡里拿�
 
 ### 其它
 
+- **子关卡分裂（heatmap split）两处修复（2026-10-05）**：
+  - `SubLevelContainer.tick()` / `processSubLevelRemovals()` 改为**快照遍历**：fastutil `ReferenceArrayList.forEach` 沿用旧底层数组却每轮重读 `size`，而 `SubLevel::tick → heatMapManager.split → assembleBlocks → allocateNewSubLevel → allSubLevels.add` 会在遍历中途插入新元素 → `Index N out of bounds for length N`（登录后 1–2 秒必崩）。`processSubLevelRemovals` 另加「槽位仍是它才移除」的守卫，避免重复移除。
+  - **分裂出来的新子关卡立刻消失**：`ServerSubLevel.tick()` 是 `super.tick → updateBoundingBox → heatMapManager.tick`，新子关卡的 `globalBounds` 在创建当 tick 还是全 0；同一 tick 稍后 `SubLevelContainer.tick` 的 `observers` 会跑 `physicsSystem.tick → ticketManager.update`，按 bbox 算出的 chunk 是 `(0,0)`，`isChunkLoadedEnough(0,0)` 为 false → `holdingChunkMap.moveToUnloaded()` 把它序列化进 holding chunk 并 `removeSubLevel(UNLOADED)`，世界里那半边方块当场消失（其实被存盘了，玩家看不到）。修复：`SubLevelAssemblyHelper.assembleBlocks` 在 `return` 前补一次 `subLevel.updateBoundingBox()`（与下一 tick 会做的是同一件事）。
+
 - 修复 `RandomPosMixin` 导致的线上崩溃。
 - `IntegratedServerMixin` 把 Toast 操作包进 `minecraft.execute`，修复跨线程崩溃。
 - 删除依赖 Create 方块的 schematic（`vostone_2.nbt`、`vinalilime.nbt`）。

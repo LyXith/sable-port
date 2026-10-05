@@ -137,6 +137,13 @@ public class SubLevelAssemblyHelper {
         pipeline.teleport(subLevel, subLevel.logicalPose().position(), subLevel.logicalPose().orientation());
         subLevel.updateLastPose();
 
+        // PORT-NOTE: a freshly assembled sub-level still has zeroed global bounds until its
+        // first ServerSubLevel.tick(). The physics observer (ticket manager) runs later in this
+        // same tick, sees the (0, 0) chunk as not loaded and calls holdingChunkMap.moveToUnloaded,
+        // serializing the brand-new sub-level into a holding chunk -> the split-off part vanishes
+        // immediately. Compute the bounds now, exactly as the next tick() would.
+        subLevel.updateBoundingBox();
+
         SubLevelAssemblyHelper.moveTrackingPoints(level, bounds, subLevel, transform);
 
         return subLevel;

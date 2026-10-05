@@ -141,7 +141,16 @@ public abstract class SubLevelContainer {
      * Called every tick for the plotgrid.
      */
     public void tick() {
-        this.allSubLevels.forEach(SubLevel::tick);
+        // Iterate over a snapshot: SubLevel::tick can split off a brand-new sub-level
+        // (heatmap split -> assembleBlocks -> allocateNewSubLevel -> allSubLevels.add),
+        // and ReferenceArrayList.forEach keeps the old backing array while re-reading the
+        // size field each round, so an addition mid-iteration overruns the stale array
+        // (AIOOBE "Index N out of bounds for length N"). Sub-levels created during this
+        // tick are picked up starting next tick.
+        final SubLevel[] snapshot = this.allSubLevels.toArray(new SubLevel[0]);
+        for (final SubLevel subLevel : snapshot) {
+            subLevel.tick();
+        }
         this.processSubLevelRemovals();
 
         this.observers.forEach(observer -> observer.tick(this));
@@ -151,7 +160,11 @@ public abstract class SubLevelContainer {
      * Processes & follows through on queued sub-level removals
      */
     public void processSubLevelRemovals() {
-        for (final SubLevel subLevel : this.allSubLevels) {
+        // Snapshot first, remove afterwards: removing from inside a for-each trips the
+        // fail-fast iterator (ConcurrentModificationException), and a sub-level removed by
+        // another path since the iteration started must not be removed a second time.
+        final SubLevel[] snapshot = this.allSubLevels.toArray(new SubLevel[0]);
+        for (final SubLevel subLevel : snapshot) {
             if (subLevel instanceof final ServerSubLevel serverSubLevel) {
                 if (!serverSubLevel.isRemoved() && serverSubLevel.getMassTracker().isInvalid()) {
                     serverSubLevel.getPlot().destroyAllBlocks();
@@ -162,7 +175,12 @@ public abstract class SubLevelContainer {
             if (subLevel.isRemoved()) {
                 final LevelPlot plot = subLevel.getPlot();
                 final ChunkPos plotPos = plot.plotPos;
-                this.removeSubLevel(plotPos.x - this.originX, plotPos.z - this.originZ, SubLevelRemovalReason.REMOVED);
+                final int x = plotPos.x - this.originX;
+                final int z = plotPos.z - this.originZ;
+
+                if (this.getSubLevel(x, z) == subLevel) {
+                    this.removeSubLevel(x, z, SubLevelRemovalReason.REMOVED);
+                }
             }
         }
     }
