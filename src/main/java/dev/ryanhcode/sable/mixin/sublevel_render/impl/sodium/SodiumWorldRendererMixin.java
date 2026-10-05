@@ -92,7 +92,10 @@ public abstract class SodiumWorldRendererMixin {
         final PrioritizeChunkUpdates chunkUpdates = Minecraft.getInstance().options.prioritizeChunkUpdates().get();
         final RenderRegionCache renderRegionCache = new RenderRegionCache();
         for (final ClientSubLevel subLevel : container.getAllSubLevels()) {
-            subLevel.getRenderData().compileSections(chunkUpdates, renderRegionCache, camera);
+            final SubLevelRenderData renderData = subLevel.getRenderData();
+            if (renderData != null) {
+                renderData.compileSections(chunkUpdates, renderRegionCache, camera);
+            }
         }
     }
 
@@ -118,7 +121,12 @@ public abstract class SodiumWorldRendererMixin {
             return;
         }
 
-        ((ClientSubLevel) plot.getSubLevel()).getRenderData().setDirty(sectionX, sectionY, sectionZ, playerChanged);
+        final SubLevelRenderData renderData = ((ClientSubLevel) plot.getSubLevel()).getRenderData();
+        if (renderData == null) {
+            return;
+        }
+
+        renderData.setDirty(sectionX, sectionY, sectionZ, playerChanged);
         ci.cancel();
     }
 
@@ -158,6 +166,9 @@ public abstract class SodiumWorldRendererMixin {
                     bufferSource
             );
             final SubLevelRenderData renderData = subLevel.getRenderData();
+            if (renderData == null) {
+                continue;
+            }
             final Pose3dc renderPose = subLevel.renderPose(partialTick);
             final Vector3dc rotationPoint = renderPose.rotationPoint();
             final PoseStack poseStack = new PoseStack();

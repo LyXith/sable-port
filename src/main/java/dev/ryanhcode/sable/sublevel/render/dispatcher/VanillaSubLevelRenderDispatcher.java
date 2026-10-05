@@ -71,6 +71,16 @@ public class VanillaSubLevelRenderDispatcher implements SubLevelRenderDispatcher
         }
 
         final SectionRenderDispatcher sectionRenderDispatcher = Minecraft.getInstance().levelRenderer.sectionRenderDispatcher();
+
+        // LevelRenderer only constructs its SectionRenderDispatcher inside
+        // #invalidateCompiledGeometry, which first runs during the extract of the frame
+        // after a world is joined. The tracking packet can arrive before that, and plot
+        // sections cannot be created without one to attach them to -- report "not ready"
+        // instead of throwing, so ClientSubLevel can defer and retry a frame later.
+        if (sectionRenderDispatcher == null) {
+            return null;
+        }
+
         return new VanillaChunkedSubLevelRenderData(subLevel, sectionRenderDispatcher);
     }
 

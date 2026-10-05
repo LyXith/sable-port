@@ -52,11 +52,29 @@ public class PhysicsBlockPropertiesDefinitionLoader extends SimpleJsonResourceRe
     }
 
     /**
+     * @return whether any block is registered under the given resource namespace
+     */
+    private static boolean hasBlocksInNamespace(final String namespace) {
+        for (final Identifier id : BuiltInRegistries.BLOCK.keySet()) {
+            if (id.getNamespace().equals(namespace)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Applies a singular physics definition to a block or set of blocks
      */
     public static void applyToBlocks(final PhysicsBlockPropertiesDefinition definition) {
         final ExtraCodecs.TagOrElementLocation selector = definition.selector();
         final ObjectArrayList<Block> blocks = new ObjectArrayList<>(16);
+
+        // Selectors may legitimately point at content from an optional mod (Create's
+        // flywheel, for instance). When that mod is absent no block exists under its
+        // namespace at all, which is a missing dependency rather than a broken datapack
+        // -- report it quietly so the real errors stay visible.
+        final boolean namespacePresent = hasBlocksInNamespace(selector.id().getNamespace());
 
         if (selector.tag()) {
             // The selector is a tag, let's pick all blocks
@@ -71,16 +89,20 @@ public class PhysicsBlockPropertiesDefinitionLoader extends SimpleJsonResourceRe
 
                     blocks.add(block);
                 }
-            } else {
+            } else if (namespacePresent) {
                 Sable.LOGGER.error("Failed to apply tag physics properties. Unknown tag: {}", selector.id());
+            } else {
+                Sable.LOGGER.debug("Skipping physics properties for {}: namespace {} is not installed", selector.id(), selector.id().getNamespace());
             }
         } else {
             if (BuiltInRegistries.BLOCK.containsKey(selector.id())) {
                 // The selector is not a tag, let's just get the block
                 final Block block = BuiltInRegistries.BLOCK.getValue(selector.id());
                 blocks.add(block);
-            } else {
+            } else if (namespacePresent) {
                 Sable.LOGGER.error("Failed to apply tag physics properties. Unknown block: {}", selector.id());
+            } else {
+                Sable.LOGGER.debug("Skipping physics properties for {}: namespace {} is not installed", selector.id(), selector.id().getNamespace());
             }
         }
 

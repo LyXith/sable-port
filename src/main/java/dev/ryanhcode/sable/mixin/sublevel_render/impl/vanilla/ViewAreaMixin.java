@@ -4,6 +4,7 @@ import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.mixinterface.plot.SubLevelContainerHolder;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
 import dev.ryanhcode.sable.sublevel.plot.LevelPlot;
+import dev.ryanhcode.sable.sublevel.render.SubLevelRenderData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.extract.LevelExtractor;
 import org.spongepowered.asm.mixin.Mixin;
@@ -24,7 +25,12 @@ public class ViewAreaMixin {
         final LevelPlot plot = plotContainer.getPlot(x, z);
 
         if (plot != null) {
-            (((ClientSubLevel) plot.getSubLevel()).getRenderData()).setDirty(x, y, z, playerChanged);
+            // Null until the sub-level's render data exists (vanilla's section dispatcher
+            // may not be built yet); dirty marking resumes on its own once it does.
+            final SubLevelRenderData renderData = ((ClientSubLevel) plot.getSubLevel()).getRenderData();
+            if (renderData != null) {
+                renderData.setDirty(x, y, z, playerChanged);
+            }
             ci.cancel();
         }
     }

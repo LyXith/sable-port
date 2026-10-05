@@ -164,7 +164,10 @@ public abstract class LevelRendererMixin {
 
         final Camera camera1 = Minecraft.getInstance().gameRenderer.mainCamera();
         for (final ClientSubLevel sublevel : sublevels) {
-            sublevel.getRenderData().compileSections(chunkUpdates, renderRegionCache, camera1);
+            final SubLevelRenderData renderData = sublevel.getRenderData();
+            if (renderData != null) {
+                renderData.compileSections(chunkUpdates, renderRegionCache, camera1);
+            }
         }
     }
 
@@ -375,6 +378,12 @@ public abstract class LevelRendererMixin {
                 cir.setReturnValue(false);
             } else {
                 final SubLevelRenderData renderData = subLevel.getRenderData();
+                if (renderData == null) {
+                    // Render data not built yet: nothing is compiled or visible.
+                    cir.setReturnValue(false);
+                    return;
+                }
+
                 final SectionPos sectionPos = SectionPos.of(blockPos);
                 cir.setReturnValue(renderData.isSectionCompiled(sectionPos.x(), sectionPos.y(), sectionPos.z()));
             }

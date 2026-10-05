@@ -21,6 +21,7 @@ import dev.ryanhcode.sable.sublevel.render.vanilla.VanillaChunkedSubLevelRenderD
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.longs.LongSets;
@@ -321,104 +322,82 @@ public final class SubLevelBatchedTerrainRenderer {
                 Util.makeEnumMap(ChunkSectionLayer.class, layer -> new ArrayList<>());
         int maxIndices = 0;
 
-        for (final PlotChunkHolder holder : plot.getLoadedChunks()) {
-            final LevelChunk chunk = holder.getChunk();
-            if (chunk == null) {
+        final LongArrayList drawOrder = sable$sectionDrawOrder(plot, visibleSections, pose, cameraPos, frustum);
+
+        for (int orderIndex = 0; orderIndex < drawOrder.size(); orderIndex++) {
+            final long sectionNode = drawOrder.getLong(orderIndex);
+
+            final SectionRenderDispatcher.RenderSection renderSection =
+                    chunkedRenderData.getRenderSection(SectionPos.of(sectionNode));
+            if (!isSectionBatchable(dispatcher, renderSection)) {
                 continue;
             }
 
-            final ChunkPos chunkPos = chunk.getPos();
-            final LevelChunkSection[] sections = chunk.getSections();
+            final SectionMesh mesh = renderSection.getSectionMesh();
+            final BlockPos origin = renderSection.getRenderOrigin();
+            int infoIndex = -1;
 
-            for (int sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
-                final LevelChunkSection section = sections[sectionIndex];
-                if (section == null || section.hasOnlyAir()) {
+            // Water and glass keep the sort they were compiled with until something asks
+            // for a new one; vanilla does it every frame, we do it on a timer.
+            if (resortTranslucency && renderSection.hasTranslucentGeometry()) {
+                renderSection.resortTransparency();
+            }
+
+            for (final ChunkSectionLayer layer : ChunkSectionLayer.values()) {
+                final SectionMesh.SectionDraw sectionDraw = mesh.getSectionDraw(layer);
+                if (sectionDraw == null) {
                     continue;
                 }
 
-                final int sectionY = chunk.getSectionYFromSectionIndex(sectionIndex);
-                final long sectionNode = SectionPos.asLong(chunkPos.x, sectionY, chunkPos.z);
-                if (visibleSections != null && !visibleSections.contains(sectionNode)) {
+                final SectionRenderDispatcher.RenderSectionBufferSlice slice =
+                        dispatcher.getRenderSectionSlice(mesh, layer);
+                if (slice == null) {
+                    continue;
+                }
+                if (sectionDraw.hasCustomIndexBuffer() && slice.indexBuffer() == null) {
                     continue;
                 }
 
-                final int sectionMinY = sectionY << 4;
-                if (frustum != null && !frustum.isVisible(sectionBounds(pose, chunkPos, sectionMinY))) {
-                    continue;
-                }
-
-                final SectionRenderDispatcher.RenderSection renderSection =
-                        chunkedRenderData.getRenderSection(SectionPos.of(sectionNode));
-                if (!isSectionBatchable(dispatcher, renderSection)) {
-                    continue;
-                }
-
-                final SectionMesh mesh = renderSection.getSectionMesh();
-                final BlockPos origin = renderSection.getRenderOrigin();
-                int infoIndex = -1;
-
-                // Water and glass keep the sort they were compiled with until something asks
-                // for a new one; vanilla does it every frame, we do it on a timer.
-                if (resortTranslucency && renderSection.hasTranslucentGeometry()) {
-                    renderSection.resortTransparency();
-                }
-
-                for (final ChunkSectionLayer layer : ChunkSectionLayer.values()) {
-                    final SectionMesh.SectionDraw sectionDraw = mesh.getSectionDraw(layer);
-                    if (sectionDraw == null) {
-                        continue;
-                    }
-
-                    final SectionRenderDispatcher.RenderSectionBufferSlice slice =
-                            dispatcher.getRenderSectionSlice(mesh, layer);
-                    if (slice == null) {
-                        continue;
-                    }
-                    if (sectionDraw.hasCustomIndexBuffer() && slice.indexBuffer() == null) {
-                        continue;
-                    }
-
-                    if (infoIndex == -1) {
-                        infoIndex = infos.size();
-                        infos.add(new DynamicGpuData.ChunkSectionInfo(
-                                origin.getX() + offX,
-                                origin.getY() + offY,
-                                origin.getZ() + offZ,
-                                renderSection.getVisibility(now, fadeMillis)
-                        ));
-                    }
-
-                    final VertexFormat vertexFormat = layer.pipeline(false).getVertexFormatBinding(0);
-                    final GpuBuffer vertexBuffer = slice.vertexBuffer();
-                    final GpuBuffer indexBuffer;
-                    final IndexType indexType;
-                    final int firstIndex;
-
-                    if (sectionDraw.hasCustomIndexBuffer()) {
-                        indexBuffer = slice.indexBuffer();
-                        indexType = sectionDraw.indexType();
-                        firstIndex = (int) (slice.indexBufferOffset() / indexType.bytes);
-                    } else {
-                        indexBuffer = null;
-                        indexType = null;
-                        firstIndex = 0;
-                        maxIndices = Math.max(maxIndices, sectionDraw.indexCount());
-                    }
-
-                    final int baseVertex = (int) (slice.vertexBufferOffset() / vertexFormat.getVertexSize());
-                    final int uniformIndex = infoIndex;
-
-                    drawsPerLayer.get(layer).add(new RenderPass.Draw<>(
-                            0,
-                            vertexBuffer,
-                            indexBuffer,
-                            indexType,
-                            firstIndex,
-                            sectionDraw.indexCount(),
-                            baseVertex,
-                            (sectionInfos, uploader) -> uploader.setUniform("ChunkSection", sectionInfos[uniformIndex])
+                if (infoIndex == -1) {
+                    infoIndex = infos.size();
+                    infos.add(new DynamicGpuData.ChunkSectionInfo(
+                            origin.getX() + offX,
+                            origin.getY() + offY,
+                            origin.getZ() + offZ,
+                            renderSection.getVisibility(now, fadeMillis)
                     ));
                 }
+
+                final VertexFormat vertexFormat = layer.pipeline(false).getVertexFormatBinding(0);
+                final GpuBuffer vertexBuffer = slice.vertexBuffer();
+                final GpuBuffer indexBuffer;
+                final IndexType indexType;
+                final int firstIndex;
+
+                if (sectionDraw.hasCustomIndexBuffer()) {
+                    indexBuffer = slice.indexBuffer();
+                    indexType = sectionDraw.indexType();
+                    firstIndex = (int) (slice.indexBufferOffset() / indexType.bytes);
+                } else {
+                    indexBuffer = null;
+                    indexType = null;
+                    firstIndex = 0;
+                    maxIndices = Math.max(maxIndices, sectionDraw.indexCount());
+                }
+
+                final int baseVertex = (int) (slice.vertexBufferOffset() / vertexFormat.getVertexSize());
+                final int uniformIndex = infoIndex;
+
+                drawsPerLayer.get(layer).add(new RenderPass.Draw<>(
+                        0,
+                        vertexBuffer,
+                        indexBuffer,
+                        indexType,
+                        firstIndex,
+                        sectionDraw.indexCount(),
+                        baseVertex,
+                        (sectionInfos, uploader) -> uploader.setUniform("ChunkSection", sectionInfos[uniformIndex])
+                ));
             }
         }
 
@@ -440,6 +419,74 @@ public final class SubLevelBatchedTerrainRenderer {
         final GpuBufferSlice[] chunkSectionInfos = uniforms.writeChunkSections(infos.toArray(new DynamicGpuData.ChunkSectionInfo[0]));
 
         return new ChunkSectionsToRender.DrawSeparate(terrainTransform, drawsPerLayer, maxIndices, chunkSectionInfos);
+    }
+
+    /**
+     * 本帧要画的 plot section，<b>按到相机的距离从近到远</b>排序。
+     *
+     * <p>原版这条链是：{@code LevelRenderer.visibleSections} 由遮挡图从相机所在 section 出发
+     * 广播而来，天然是近到远；{@code prepareChunkRenders} 只在<b>经典透明</b>（OIT 关闭，也就是
+     * {@code reverseTranslucent == true}）时把它反转成远到近，好让水/玻璃按后往前混色。
+     *
+     * <p>这里原先按 {@code plot.getLoadedChunks()} 的顺序走，跟相机毫无关系：同一层里谁先画
+     * 取决于区块加载顺序。半透明层是<b>写深度</b>的，近的先画就会把远的挡在深度测试之外 ——
+     * 在子维度上表现为「水里的方块看不见」「某一片水后面直接看穿」。
+     *
+     * <p>距离在 plot 坐标系里算（相机先经 renderPose 反投影），子关卡的渲染变换是刚体变换，
+     * 距离次序与世界坐标一致。
+     *
+     * @see dev.ryanhcode.sable.mixin.sublevel_render.RenderSectionMixin（单个 section 内部的排序键）
+     */
+    private static LongArrayList sable$sectionDrawOrder(final LevelPlot plot, final LongSet visibleSections,
+                                                        final Pose3dc pose, final Vec3 cameraPos, final Frustum frustum) {
+        final Vec3 cameraPlot = pose.transformPositionInverse(cameraPos);
+        final LongArrayList nodes = new LongArrayList();
+
+        for (final PlotChunkHolder holder : plot.getLoadedChunks()) {
+            final LevelChunk chunk = holder.getChunk();
+            if (chunk == null) {
+                continue;
+            }
+
+            final ChunkPos chunkPos = chunk.getPos();
+            final LevelChunkSection[] sections = chunk.getSections();
+
+            for (int sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+                final LevelChunkSection section = sections[sectionIndex];
+                if (section == null || section.hasOnlyAir()) {
+                    continue;
+                }
+
+                final int sectionY = chunk.getSectionYFromSectionIndex(sectionIndex);
+                final long sectionNode = SectionPos.asLong(chunkPos.x, sectionY, chunkPos.z);
+                if (visibleSections != null && !visibleSections.contains(sectionNode)) {
+                    continue;
+                }
+
+                if (frustum != null && !frustum.isVisible(sectionBounds(pose, chunkPos, sectionY << 4))) {
+                    continue;
+                }
+
+                nodes.add(sectionNode);
+            }
+        }
+
+        nodes.sort((a, b) -> sable$compareSectionDistance(a, b, cameraPlot));
+        return nodes;
+    }
+
+    /**
+     * @return section 中心到相机的距离平方，两个点都在 plot 坐标系里
+     */
+    private static double sable$sectionDistanceSq(final long sectionNode, final Vec3 cameraPlot) {
+        final double dx = (SectionPos.x(sectionNode) + 8.0) - cameraPlot.x;
+        final double dy = (SectionPos.y(sectionNode) + 8.0) - cameraPlot.y;
+        final double dz = (SectionPos.z(sectionNode) + 8.0) - cameraPlot.z;
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    private static int sable$compareSectionDistance(final long a, final long b, final Vec3 cameraPlot) {
+        return Double.compare(sable$sectionDistanceSq(a, cameraPlot), sable$sectionDistanceSq(b, cameraPlot));
     }
 
     private static DynamicGpuData ownUniforms() {

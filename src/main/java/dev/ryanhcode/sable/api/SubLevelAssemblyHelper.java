@@ -46,6 +46,10 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.ticks.LevelChunkTicks;
+import net.minecraft.world.ticks.LevelTickAccess;
+import net.minecraft.world.ticks.ScheduledTick;
+import net.minecraft.world.ticks.TickContainerAccess;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -467,6 +471,13 @@ public class SubLevelAssemblyHelper {
                 final LevelChunk chunk = accelerator.getChunk(SectionPos.blockToSectionCoord(block.getX()),
                         SectionPos.blockToSectionCoord(block.getZ()));
 
+                // Pending block/fluid ticks live in the source chunk and are NOT moved with the
+                // block itself. Without re-targeting them they fire on the air left behind, so the
+                // relocated block keeps its pending tick forever - Create's large water wheel
+                // schedules a 1-tick removal of its placeholder blocks and would leave them behind
+                // as invisible, collidable ghosts whenever a split relocates them mid-schedule.
+                movePendingTicks(chunk, level, resultingLevel, block, transform.apply(block));
+
                 level.updatePOIOnBlockStateChange(block, chunk.getBlockState(block), airState);
                 chunk.setBlockState(block, airState, Block.UPDATE_MOVE_BY_PISTON);
             } catch (final Exception e) {
@@ -478,6 +489,53 @@ public class SubLevelAssemblyHelper {
         for (final BlockPos block : blocks) {
             final BlockState subLevelState = airState;
             resultingLevel.sendBlockUpdated(block, Blocks.STONE.defaultBlockState(), subLevelState, 3);
+        }
+    }
+
+    /**
+     * Moves every block and fluid tick scheduled at {@code from} over to {@code to}, keeping the
+     * delay relative to the current game time. A no-op when source and destination are the very
+     * same position in the very same level (identity transform).
+     */
+    private static void movePendingTicks(final LevelChunk sourceChunk, final Level sourceLevel,
+                                         final Level targetLevel, final BlockPos from, final BlockPos to) {
+        if (sourceLevel == targetLevel && from.equals(to)) return;
+
+        final long sourceGameTime = sourceLevel.getGameTime();
+        final long targetGameTime = targetLevel.getGameTime();
+
+        movePendingTicks(sourceChunk.getBlockTicks(), targetLevel.getBlockTicks(),
+                from, to, sourceGameTime, targetGameTime);
+        movePendingTicks(sourceChunk.getFluidTicks(), targetLevel.getFluidTicks(),
+                from, to, sourceGameTime, targetGameTime);
+    }
+
+    private static <T> void movePendingTicks(final TickContainerAccess<T> sourceTicks,
+                                             final LevelTickAccess<T> targetTicks,
+                                             final BlockPos from, final BlockPos to,
+                                             final long sourceGameTime, final long targetGameTime) {
+        // LevelChunk.getBlockTicks()/getFluidTicks() are always LevelChunkTicks instances.
+        if (!(sourceTicks instanceof final LevelChunkTicks<?> container)) return;
+        @SuppressWarnings("unchecked")
+        final LevelChunkTicks<T> ticks = (LevelChunkTicks<T>) container;
+
+        final List<ScheduledTick<T>> pending = ticks.getAll().filter(tick -> tick.pos().equals(from)).toList();
+        if (pending.isEmpty()) return;
+
+        for (final ScheduledTick<T> tick : pending) {
+            final long delay = Math.max(1L, tick.triggerTick() - sourceGameTime);
+            // LevelTicks.schedule drops the tick silently when the destination chunk has no tick
+            // container registered with the level, so verify before discarding the source ticks.
+            targetTicks.schedule(new ScheduledTick<>(tick.type(), to, targetGameTime + delay,
+                    tick.priority(), tick.subTickOrder()));
+        }
+
+        final boolean accepted = pending.stream().allMatch(tick -> targetTicks.hasScheduledTick(to, tick.type()));
+        if (accepted) {
+            ticks.removeIf(tick -> tick.pos().equals(from));
+        } else {
+            Sable.LOGGER.warn("Could not migrate {} pending tick(s) from {} to {}: no tick container registered there",
+                    pending.size(), from, to);
         }
     }
 

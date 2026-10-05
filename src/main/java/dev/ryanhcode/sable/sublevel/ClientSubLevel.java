@@ -242,18 +242,30 @@ public class ClientSubLevel extends SubLevel implements ClientSubLevelAccess {
         }
 
         super.onRemove();
-        this.renderData.close();
+        if (this.renderData != null) {
+            this.renderData.close();
+            this.renderData = null;
+        }
     }
 
     /**
      * Re-creates the render data using the current renderer.
+     *
+     * <p>Does nothing while vanilla's section dispatcher does not exist yet: the tracking
+     * packet can arrive before the first extract builds it, and in that case
+     * {@link #getRenderData()} retries a frame later instead of this throwing.
      */
     public void updateRenderData() {
         try {
+            final SubLevelRenderData newData = SubLevelRenderDispatcher.get().createRenderData(this);
+            if (newData == null) {
+                return;
+            }
+
             if (this.renderData != null) {
                 this.renderData.close();
             }
-            this.renderData = SubLevelRenderDispatcher.get().createRenderData(this);
+            this.renderData = newData;
         } catch (final Throwable t) {
             final CrashReport crashreport = CrashReport.forThrowable(t, "Updating render data");
             final CrashReportCategory crashreportcategory = crashreport.addCategory("Render Dispatcher");
@@ -263,9 +275,12 @@ public class ClientSubLevel extends SubLevel implements ClientSubLevelAccess {
     }
 
     /**
-     * @return the renderer for this sub-level
+     * @return the renderer for this sub-level, creating it on first use
      */
     public SubLevelRenderData getRenderData() {
+        if (this.renderData == null && !this.isRemoved()) {
+            this.updateRenderData();
+        }
         return this.renderData;
     }
 

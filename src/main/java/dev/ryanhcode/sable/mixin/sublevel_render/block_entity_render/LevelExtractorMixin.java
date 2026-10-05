@@ -15,6 +15,8 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.extract.LevelExtractor;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
@@ -105,7 +107,17 @@ public class LevelExtractorMixin implements SubLevelBlockEntityRenderExtension {
 
                             final BlockPos blockPos = blockEntity.getBlockPos();
                             final ModelFeatureRenderer.CrumblingOverlay crumblingOverlay = this.sable$createCrumblingOverlay(blockPos, transformation, rotationPoint);
-                            final BlockEntityRenderState renderState = this.levelRenderer.blockEntityRenderDispatcher().tryExtractRenderState(blockEntity, partialTick, crumblingOverlay, false);
+                            final BlockEntityRenderDispatcher dispatcher = this.levelRenderer.blockEntityRenderDispatcher();
+                            final BlockEntityRenderer<?, ?> renderer = dispatcher.getRenderer(blockEntity);
+                            // 第 4 个参数不是「force」而是「本次只提取哪一类方块实体」：tryExtractRenderState 要求它与
+                            // renderer.shouldRenderOffScreen() 完全相等，否则直接返回 null（原版从可见 section 提取时传
+                            // false、从 getGloballyRenderedBlockEntities 提取时传 true）。这里逐个遍历子关卡的方块实体，
+                            // 两类都要，所以按 renderer 自身的取值传。
+                            // FluidTank / Schematicannon 等 Create 渲染器把 shouldRenderOffScreen 覆写成 true，
+                            // 之前固定传 false 会一律返回 null —— 而原版路径提取出来的那份又被上面的 removeIf 删掉，
+                            // 结果就是储罐液体、加农炮炮体等完全不渲染。
+                            final boolean offScreen = renderer != null && renderer.shouldRenderOffScreen();
+                            final BlockEntityRenderState renderState = dispatcher.tryExtractRenderState(blockEntity, partialTick, crumblingOverlay, offScreen);
                             if (renderState == null) {
                                 continue;
                             }

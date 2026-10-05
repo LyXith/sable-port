@@ -112,10 +112,14 @@ dependencies {
 
     implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
-    compileOnly "maven.modrinth:sodium:${sodium_version}"
+    compileOnly("maven.modrinth:sodium:${sodium_version}")
     compileOnly("maven.modrinth:scalablelux:${scalablelux_version}") {
         transitive = false
     }
+    // Create-Fly, compile-time only: lets compatibility/create mixins reference Create types directly
+    // (string @At targets are not enough when a handler signature needs one). Runtime presence is
+    // gated by AbstractSableMixinPlugin, so sable still works without Create installed.
+    compileOnly fileTree(dir: rootDir, include: 'create-fly-*.jar')
     if (project.findProperty('scalablelux_runtime') == 'true') {
         modLocalRuntime("maven.modrinth:scalablelux:${scalablelux_version}") {
             transitive = false

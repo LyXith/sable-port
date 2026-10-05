@@ -52,7 +52,12 @@ public interface SubLevelRenderDispatcher extends NativeResource, ResourceManage
      */
     default void rebuild(final Iterable<ClientSubLevel> sublevels) {
         for (final ClientSubLevel sublevel : sublevels) {
-            sublevel.getRenderData().rebuild();
+            // Null while the sub-level's render data is still waiting on vanilla's
+            // section dispatcher; there is simply nothing to rebuild yet.
+            final SubLevelRenderData renderData = sublevel.getRenderData();
+            if (renderData != null) {
+                renderData.rebuild();
+            }
         }
     }
 

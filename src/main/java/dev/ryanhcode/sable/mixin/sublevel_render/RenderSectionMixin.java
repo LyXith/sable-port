@@ -50,6 +50,13 @@ public class RenderSectionMixin implements RenderSectionExtension {
      * worker threads, and {@code renderPose()} writes the partial-tick it was last evaluated
      * at, which would race with the render thread. The tick of interpolation the logical pose
      * is behind shifts the key by well under a block.
+     *
+     * <p>The other half of the same job — the {@code TranslucencyPointOfView} those tasks use
+     * to decide <em>whether</em> to re-sort — is fixed in
+     * {@link dev.ryanhcode.sable.mixin.sublevel_render.impl.vanilla.CompileTaskMixin} and
+     * {@link dev.ryanhcode.sable.mixin.sublevel_render.impl.vanilla.ResortTransparencyTaskMixin};
+     * both have to agree on the coordinate system, or a re-sort is either never triggered or
+     * triggered with a meaningless key.
      */
     @Inject(
             method = "createVertexSorting(Lnet/minecraft/core/SectionPos;Lnet/minecraft/world/phys/Vec3;)Lcom/mojang/blaze3d/vertex/VertexSorting;",
