@@ -15,7 +15,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.InterpolationHandler;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaterniondc;
@@ -119,26 +118,38 @@ public abstract class LivingEntityMixin extends Entity implements LivingEntitySt
 
     @ModifyVariable(method = "tick", at = @At("STORE"), ordinal = 0)
     private double sable$modifyXDifference(final double x) {
-        return this.sable$getDifference(true).x;
+        return this.sable$getDifference().x;
     }
 
 
     @ModifyVariable(method = "tick", at = @At("STORE"), ordinal = 1)
     private double sable$modifyZDifference(final double x) {
-        return this.sable$getDifference(true).z;
+        return this.sable$getDifference().z;
     }
 
     @Redirect(method = "calculateEntityAnimation", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;updateWalkAnimation(F)V"))
     private void sable$walkAnimation(final LivingEntity instance, final float g, final boolean pIncludeHeight) {
-        final Vec3 delta = this.sable$getDifference(false);
+        final Vec3 delta = this.sable$getDifference();
         final float f = (float) Mth.length(delta.x, pIncludeHeight ? delta.y : 0.0D, delta.z);
 
         this.updateWalkAnimation(f);
 
     }
 
+    /**
+     * Computes the movement of this entity since the last tick, relative to the sub-level it is
+     * standing on instead of relative to the world.
+     * <p>
+     * Entities tracking a sub-level keep their position in world space and are dragged along by it,
+     * so their raw position delta also contains the motion of the sub-level itself. Converting the
+     * old position through {@link SubLevel#lastPose()} and the current one through
+     * {@link SubLevel#logicalPose()} cancels that out, leaving only what the entity actually did.
+     * <p>
+     * This has to apply to the local player as well: it is carried in world space on the client too,
+     * so skipping it made a standing player "walk" (and bob the camera) whenever its sub-level moved.
+     */
     @Unique
-    private Vec3 sable$getDifference(final boolean countLocalPlayer) {
+    private Vec3 sable$getDifference() {
         Vec3 currentPos = this.position();
         Vec3 oldPos = new Vec3(this.xo, this.yo, this.zo);
 
@@ -146,7 +157,7 @@ public abstract class LivingEntityMixin extends Entity implements LivingEntitySt
 
         final SubLevel trackingSubLevel = Sable.HELPER.getTrackingSubLevel(this);
 
-        if (trackingSubLevel != null && (countLocalPlayer || !(((Object)this) instanceof final Player player && player.isLocalPlayer()))) {
+        if (trackingSubLevel != null) {
             final Pose3d pose = trackingSubLevel.logicalPose();
             final Pose3dc lastPose = trackingSubLevel.lastPose();
             currentPos = pose.transformPositionInverse(currentPos);
