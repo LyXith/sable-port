@@ -47,6 +47,8 @@ public static void spawnPhysicsStone(final ServerLevel level,
 
 ## 相关 API
 
+> 完整方法清单见 [`sublevel-api.md`](sublevel-api.md)。
+
 - `dev.ryanhcode.sable.api.sublevel.SubLevelContainer`（`getContainer(ServerLevel)`）
 - `dev.ryanhcode.sable.api.sublevel.ServerSubLevelContainer`（`allocateNewSubLevel`、`physicsSystem`）
 - `dev.ryanhcode.sable.sublevel.SubLevel` / `ServerSubLevel`（`getPlot`、`updateLastPose`）
